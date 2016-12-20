@@ -297,7 +297,7 @@ def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
     '''
-    log.info("=>开始执行财务条件过滤%s"%stock_list)
+    log.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
     pe_min = 0
     pe_max = 200
     eps_min = 0
@@ -316,7 +316,10 @@ def filter_by_query(stock_list, context, data):
                    ).limit(
             g.param['pick_stock_count'][g.VALUE]
         ))
-    log.info("=>结束执行财务条件过滤%s"%df['code'])
+    #log.info("=>结束执行财务条件过滤%s"%list(df['code']))
+    list1=list(df['code'])
+    for s in list1:
+        log.info("=>结束执行财务条件过滤:%s"%get_security_info(s).display_name)
     return list(df['code'])
 
 
@@ -387,14 +390,21 @@ def filter_limitup(stock_list, context, data):
     '''
     log.info("=>开始执行过滤涨停的股票%s"%stock_list)
     threshold = 1.00
+    stock_list2=[]
     # last_prices = history(1, unit='1m', field='close',
     #                       security_list=stock_list)
 
     # 已存在于持仓的股票即使涨停也不过滤，避免此股票再次可买，但因被过滤而导致选择别的股票
     # return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
     #         or last_prices[stock][-1] < data[stock].high_limit * threshold]
-    return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
-            or data[stock].close < data[stock].high_limit * threshold]
+    for stock in stock_list:
+        if stock in context.portfolio.positions.keys() or data[stock].close < (data[stock].high_limit * threshold):
+            log.info("=>%s的现价：%s"%(stock,data[stock].close))
+            log.info("=>%s的涨停价：%s"%(stock,data[stock].high_limit * threshold))        
+            stock_list2.append(stock)
+    return stock_list2
+    #return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
+    #        or data[stock].close < data[stock].high_limit * threshold]
 
 
 def filter_limitdown(stock_list, context, data):
@@ -488,6 +498,10 @@ def filter_by_rank(stock_list, context, data):
         
                 avg_15 = data[stock].mavg(15, field='close')
                 cur_price = data[stock].close
+                log.info("=>%s130日最低价:%s"%(get_security_info(stock).display_name,low_price_130))
+                log.info("=>%s130日最高价:%s"%(get_security_info(stock).display_name,high_price_130))
+                log.info("=>%s15日平均价:%s"%(get_security_info(stock).display_name,avg_15))
+                log.info("=>%s当前价:%s"%(get_security_info(stock).display_name,cur_price))
         
                 # avg_15 = h['close'][-15:].mean()
                 # cur_price = get_close_price(stock, 1, '1m')
@@ -495,6 +509,7 @@ def filter_by_rank(stock_list, context, data):
                 score = (cur_price - low_price_130)+(cur_price - high_price_130)+(cur_price - avg_15)
                 # score = ((cur_price-low_price_130) + (cur_price-high_price_130) +
                 # (cur_price-avg_15)) / cur_price
+                log.info("=>%s评分结果:%s"%(get_security_info(stock).display_name,score))
                 dst_stocks[stock] = score
         
             df = pd.DataFrame(dst_stocks.values(), index=dst_stocks.keys())
