@@ -1,0 +1,7 @@
+{
+  "username": "邮箱地址（username与account只用输入一个即可）",
+  "account": "手机号",
+  "password": "组合代码(例:ZH818559)",
+  "portfolio_code": "组合号",
+  "portfolio_market": "交易市场(例:us 或者 cn 或者 hk)"
+}

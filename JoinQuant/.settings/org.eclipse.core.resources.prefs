@@ -1,0 +1,9 @@
+eclipse.preferences.version=1
+encoding//com/join/quant/juejin/model.py=utf-8
+encoding//com/join/quant/juejin/test_backtest.py=utf-8
+encoding//com/join/quant/juejin/tradestat.py=utf-8
+encoding//com/xueqiu/shipan/api.py=utf-8
+encoding//com/xueqiu/shipan/helpers.py=utf-8
+encoding//com/xueqiu/shipan/log.py=utf8
+encoding//com/xueqiu/shipan/webtrader.py=utf-8
+encoding//com/xueqiu/shipan/xqtrader.py=utf-8
