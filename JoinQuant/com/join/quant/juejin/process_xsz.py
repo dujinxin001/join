@@ -6,6 +6,7 @@ import com.join.quant.juejin.tradestat as tradestat
 import logging as log
 import numpy as np
 import pandas as pd
+import talib as tl
 
 class process_xsz():
     def initialize(self,context):

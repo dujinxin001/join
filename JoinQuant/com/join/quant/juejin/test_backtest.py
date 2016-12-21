@@ -3,7 +3,6 @@
 from gmsdk.api import StrategyBase
 from gmsdk import to_dict
 
-
 class MyStrategy(StrategyBase):
     def __init__(self, *args, **kwargs):
         super(MyStrategy, self).__init__(*args, **kwargs)
