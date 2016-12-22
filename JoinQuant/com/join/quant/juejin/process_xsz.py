@@ -7,13 +7,17 @@ import logging as log
 import numpy as np
 import pandas as pd
 import talib as tl
+import datetime
 
-class process_xsz():
-    def initialize(self,context):
+class xiaoshizhi():
+    global g
+    def __init__(self):
+        self.initialize()
+    def initialize(self):
         self.log_section('initialize', '初始化', sep=False)
     
         # 设置系统参数
-        self.set_sys()
+        #self.set_sys()
         # 设置常数
         self.set_const()
         # 设置策略参数
@@ -50,7 +54,7 @@ class process_xsz():
     
         self.reset_day_param()
         # 盘前就判断三黑鸦状态，因为判断的数据为前4日
-        g.cache['is_last_day_3_crows'] =  self._is_3_crows(
+        self.g.cache['is_last_day_3_crows'] =  self._is_3_crows(
             g.param['index_3_crows'][g.VALUE])
         if g.cache['is_last_day_3_crows']:
             log.info("==> 前4日已经构成三黑鸦形态")
@@ -71,8 +75,9 @@ class process_xsz():
         '''
         # for key in g.stop_loss_minute:
         #     g.stop_loss_minute[key][g.FUNC](context, data)
-        hour = context.current_dt.hour
-        minute = context.current_dt.minute
+        current_dt = datetime.datetime.now()
+        hour = current_dt.hour
+        minute = current_dt.minute
         # 进行所有止损器判断，执行止损
         for stop in g.stop_loss_minute:
             if hour == 9 and minute == 31:
@@ -263,8 +268,8 @@ class process_xsz():
         for filter in g.filter:
             stock_list = filter[g.FUNC](stock_list, context, data)
             if len(stock_list) == 0:
-               log.info("股票被过滤没了")
-               return stock_list
+                log.info("股票被过滤没了")
+                return stock_list
     
         # 选取指定可买数目的股票
         return stock_list[:g.param['buy_stock_count'][g.VALUE]]
@@ -278,7 +283,6 @@ class process_xsz():
         pe_min = 0
         pe_max = 200
         eps_min = 0
-    
         q = query(valuation.code).filter(valuation.code.in_(stock_list))
         if g.param['pick_by_pe'][g.VALUE]:
             q = q.filter(
@@ -572,7 +576,7 @@ class process_xsz():
     
     #### stop loss ####
     
-    def stop_loss_by_price(self,context, data):
+    def stop_loss_by_price(self,strategy):
         '''
         大盘指数前130日内最高价超过最低价2倍，则清仓止损
         基于历史数据判定，因此若状态满足，则当天都不会变化
@@ -581,20 +585,25 @@ class process_xsz():
         if g.param['is_market_stop_loss_by_price'][g.VALUE]:
             index = g.param['index_price'][g.VALUE]
             if not g.cache['is_day_stop_loss_by_price']:
-                h = attribute_history(index, 160, unit='1d', fields=('close', 'high', 'low'), skip_paused=True)
-                low_price = h.low.min()
-                high_price = h.high.max()
+                dailybars=strategy.get_last_n_dailybars(index, 160)
+                low_price=[]
+                high_price=[]
+                for dailybar in dailybars:
+                    low_price.append(dailybar.low)
+                    high_price.append(dailybar.high)
+                low_price = min(low_price);
+                high_price = max(high_price)
                 # if high_price > 2 * low_price:
                 if high_price > 2.2 * low_price \
-                        and h['close'][-1] < h['close'][-4] \
-                        and h['close'][-1] > h['close'][-100]:
+                        and dailybars[-1].close < dailybars[-4].close \
+                        and dailybars[-1].close > dailybars[-100].close:
                     # 当日第一次输出日志
                     log.info("==> 大盘止损，%s指数前130日内最高价超过最低价2倍, 最高价: %f, 最低价: %f" % (
                         get_security_info(index).display_name, high_price, low_price))
                     g.cache['is_day_stop_loss_by_price'] = True
         
             if g.cache['is_day_stop_loss_by_price']:
-                self.position_clear(context)
+                self.position_clear(strategy)
                 g.cache['day_count'] = 0
                 g.cache['stop_trade'] = True  # 暂停当天交易
     

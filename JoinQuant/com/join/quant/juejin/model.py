@@ -2,16 +2,34 @@
 
 from gmsdk.api import StrategyBase
 
-class Mystrategy(StrategyBase):
-    def __init__(self, *args, **kwargs):
-        super(Mystrategy, self).__init__(*args, **kwargs)
+class Mystrategy():
+    global g
+    
+    def __init__(self):
+        self.exchange = ''          ## 交易所代码
+        self.sec_id = ''            ## 证券ID
 
+        self.bar_type = 0           ## bar类型
+        self.strtime = ''           ## 可视化时间
+        self.utc_time = 0.0         ## 行情时间戳
+
+        self.open = 0.0             ## 开盘价
+        self.high = 0.0             ## 最高价
+        self.low = 0.0              ## 最低价
+        self.close = 0.0            ## 收盘价
+        self.volume = 0.0           ## 成交量
+        self.amount = 0.0           ## 成交额
+
+        self.position = 0.0         ## 仓位
+        self.settle_price = 0.0     ## 结算价
+        self.upper_limit = 0.0      ## 涨停价
+        self.lower_limit = 0.0      ## 跌停价
 
     def on_login(self):
-        pass
+        self.param=['111','222','333']
 
     def on_error(self, code, msg):
-        pass
+        print(self.param[-2])
 
     def on_tick(self, tick):
         pass
