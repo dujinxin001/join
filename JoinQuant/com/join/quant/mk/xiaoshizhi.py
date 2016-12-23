@@ -91,7 +91,7 @@ def handle_bar(context, bar_dict):
     adjust_position_time = context.param['adjust_position_time'][context.VALUE]
     if hour == adjust_position_time[context.HOUR] and minute == adjust_position_time[context.MINUTE] and not context.cache['stop_trade']:
         _adjust_position(context, bar_dict)
-    if len(context.cache['selling_stocks']) and context.cache['stop_trade']:
+    if len(context.cache['sell_failed_stocks']) and context.cache['stop_trade']:
         position_clear(context,bar_dict)
     if hour == adjust_position_time[context.HOUR] and minute > adjust_position_time[context.MINUTE] and not context.cache['stop_trade']:
         if (context.cache['day_count']-1) % context.param['period'][context.VALUE] == 0:
@@ -240,6 +240,7 @@ def set_cache(context):
     c['buy_stocks']=[]    #缓存可买入股票
     c['selling_stocks']=[] #缓存已经下卖单股票
     c['buying_stocks']=[] #缓存已经下买单股票
+    c['sell_failed_stocks']=[]#缓存卖出失败的股票
     context.cache = c
 
 
@@ -265,6 +266,7 @@ def reset_day_param(context):
     context.cache['buy_stocks']=[]
     context.cache['selling_stocks']=[] #清空已经下卖单股票
     context.cache['buying_stocks']=[] #清空已经下买单股票
+    context.cache['sell_failed_stocks']=[] #清空卖出失败的股票
     
     
 
@@ -859,7 +861,6 @@ def position_close(context,stock,position,bar_dict):
         else:
             logger.warn("last high price of %s not found" % (stock))
         return True
-
     #if order.status == ORDER_STATUS.REJECTED:
         
     return False
@@ -875,8 +876,11 @@ def position_clear(context,bar_dict):
             if position.sellable>0 and not bar_dict[stock].suspended:
                 logger.info("==> 清仓，卖出所有股票")
                 if not position_close(context,stock,position,bar_dict):
-                    context.cache['selling_stocks'].append(stock)
-            
+                    if stock not in context.cache['sell_failed_stocks']:
+                        context.cache['sell_failed_stocks'].append(stock)
+                else:
+                    if stock in context.cache['sell_failed_stocks']:
+                        context.cache['sell_failed_stocks'].remove(stock)
 
 def position_adjust2(context ,bar_dict):
     positions_keys=context.portfolio.positions.keys()
