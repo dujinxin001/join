@@ -5,7 +5,7 @@ from gmsdk.api import StrategyBase
 class Mystrategy():
     global g
     
-    def __init__(self):
+    def __init__(self,position):
         self.exchange = ''          ## 交易所代码
         self.sec_id = ''            ## 证券ID
 
@@ -20,7 +20,7 @@ class Mystrategy():
         self.volume = 0.0           ## 成交量
         self.amount = 0.0           ## 成交额
 
-        self.position = 0.0         ## 仓位
+        self.position = position        ## 仓位
         self.settle_price = 0.0     ## 结算价
         self.upper_limit = 0.0      ## 涨停价
         self.lower_limit = 0.0      ## 跌停价
@@ -32,7 +32,7 @@ class Mystrategy():
         print(self.param[-2])
 
     def on_tick(self, tick):
-        pass
+        print(self.position)
 
     def on_execrpt(self, res):
         pass
