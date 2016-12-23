@@ -8,7 +8,7 @@ class Mystrategy(StrategyBase):
         super(Mystrategy, self).__init__(*args, **kwargs)
         self.xiaoshizhi=xiaoshizhi(self)
         self.xiaoshizhi.initialize()
-        self.xiaoshizhi.before_trading_start();
+        #self.xiaoshizhi.before_trading_start();
     def on_login(self):
         print('登录')
         pass
@@ -27,6 +27,7 @@ class Mystrategy(StrategyBase):
         pass
 
     def on_order_new(self, res):
+        print('on_order_new')
         pass
 
     def on_order_filled(self, res):

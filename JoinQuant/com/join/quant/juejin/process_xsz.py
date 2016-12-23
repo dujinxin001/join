@@ -77,6 +77,8 @@ class xiaoshizhi():
         dt = dt + datetime.timedelta(hours=8)
         hour = dt.hour
         minute = dt.minute
+        if hour == 9 and minute == 30:
+            self.before_trading_start()
         # 进行所有止损器判断，执行止损
         for stop in self.g.stop_loss_minute:
             if hour == 9 and minute == 31:
@@ -89,6 +91,8 @@ class xiaoshizhi():
             log.info("adjust_position_time[self.g.HOUR]=%s"%hour)
             log.info("adjust_position_time[self.g.MINUTE]=%s"% minute)
             self._adjust_position(dt)
+        if hour == 15:
+            self.after_trading_end()
     
     def _adjust_position(self,dt):
         log.info("调仓日计数 [%d]" % (self.g.cache['day_count']))
@@ -98,7 +102,8 @@ class xiaoshizhi():
         gr_index_s = self.get_growth_rate(self.g.param['index_s'][self.g.VALUE],20,dt)
         log.info("当前%s指数的20日涨幅 [%.2f%%]" % (self.g.param['index_l'][self.g.VALUE], gr_index_l * 100))
         log.info("当前%s指数的20日涨幅 [%.2f%%]" % (self.g.param['index_s'][self.g.VALUE], gr_index_s * 100))
-        if gr_index_l <= self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
+        #if gr_index_l <= self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
+        if 1==2:
             self.position_clear()
             self.g.cache['day_count'] = 0
         else:
@@ -153,7 +158,7 @@ class xiaoshizhi():
         p = {}
     
         p['period'] = (3, '调仓频率，单位：日')
-        p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
+        p['adjust_position_time'] = ((9, 40), '配置调仓时间（24小时分钟制）')
         p['pick_by_pe'] = (False, '是否根据PE选股')
         p['pick_by_eps'] = (True, '是否根据EPS选股')
         p['pick_stock_count'] = (100, '备选股票数目')
@@ -183,13 +188,13 @@ class xiaoshizhi():
         # func_register(self.g.filter, filter_market_time, '指数MACD过滤')
         self.func_register(self.g.filter, self.filter_by_query, '查询财务数据库过滤')
         self.func_register(self.g.filter, self.filter_gem, '过滤创业版股票')
-        self.func_register(self.g.filter, self.filter_paused, '过滤停牌股票')
+        #self.func_register(self.g.filter, self.filter_paused, '过滤停牌股票')
         self.func_register(self.g.filter, self.filter_st, '过滤ST及其他具有退市标签的股票')
         self.func_register(self.g.filter, self.filter_limitup, '过滤涨停的股票')
         self.func_register(self.g.filter, self.filter_limitdown, '过滤跌停的股票')
         self.func_register(self.g.filter, self.filter_blacklist, '过滤黑名单股票')
         # func_register(self.g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
-        self.func_register(self.g.filter, self.filter_new, '过滤新股')
+        #self.func_register(self.g.filter, self.filter_new, '过滤新股')
         # func_register(self.g.filter,filter_by_chaodie, '超跌过滤器')
         # func_register(self.g.filter, delect_stock, 'delect_stock')
         # func_register(self.g.filter, filter_by_rank_0, '市值评分过滤器')
@@ -271,18 +276,18 @@ class xiaoshizhi():
         return stock_list[:self.g.param['buy_stock_count'][self.g.VALUE]]
     
     
-    def filter_by_query(self,stock_list, context, data):
+    def filter_by_query(self,stock_list):
         '''
                         查询财务数据库过滤
         '''
-        log.info("=>开始执行财务条件过滤%s,%s" % (stock_list, len(stock_list)))
+        log.info("=>开始执行财务条件过滤%s,%s" % (','.join(stock_list), len(stock_list)))
         pe_min = 0
         pe_max = 200
         eps_min = 0
         
         #过滤PE
         if self.g.param['pick_by_pe'][self.g.VALUE]:
-            market_list=self.strategy.get_last_market_index(stock_list)
+            market_list=self.strategy.get_last_market_index(','.join(stock_list))
             pe_list=[]
             for market in market_list:
                 if market.pe_ratio>pe_min and market.pe_ratio<pe_max:
@@ -291,7 +296,7 @@ class xiaoshizhi():
         
         #过滤EPS
         if self.g.param['pick_by_eps'][self.g.VALUE]:
-            financial_list=self.strategy.get_last_financial_index(stock_list)
+            financial_list=self.strategy.get_last_financial_index(','.join(stock_list))
             eps_list=[]
             for financial in financial_list:
                 if financial.eps>eps_min:
@@ -299,13 +304,13 @@ class xiaoshizhi():
             stock_list=eps_list
             
         #市值排序
-        market_list=self.strategy.get_last_market_index(stock_list)
+        market_list=self.strategy.get_last_market_index(','.join(stock_list))
         market_dict={}
         for market in market_list:
             market_dict[market.symbol]=market.market_value
-        df = pd.DataFrame(market_dict.values(), index=market_dict.keys())
+        df = pd.DataFrame(list(market_dict.values()), index=market_dict.keys())
         df.columns = ['market_score']
-        df = df.sort(columns='market_score', ascending=True) 
+        df = df.sort(columns='market_score', ascending=True)
         stock_list=list(df.index)
         stock_list=stock_list[0:self.g.param['pick_stock_count'][self.g.VALUE]]
         log.info("=>结束执行财务条件过滤%s" % stock_list)
@@ -342,7 +347,7 @@ class xiaoshizhi():
         '''
         if self.g.param['filter_gem'][self.g.VALUE]:
             log.info("=>开始执行过滤创业板股票%s" % stock_list)
-            return [stock for stock in stock_list if stock[0:3] != '300']
+            return [stock for stock in stock_list if not stock.split('.')[1].startswith('300')]
         return stock_list
     
     
@@ -359,9 +364,9 @@ class xiaoshizhi():
             position_list.append(position.exchange +'.'+position.sec_id)
         for stock in stock_list:
             tick=self.strategy.get_last_ticks(stock)
-            if stock in position_list or tick.last_price < (tick.upper_limit * threshold):
-                log.info("=>%s的现价：%s" % (stock, tick.last_price))
-                log.info("=>%s的涨停价：%s" % (stock, tick.upper_limit * threshold))        
+            if stock in position_list or tick[-1].last_price < (tick[-1].upper_limit * threshold):
+                log.info("=>%s的现价：%s" % (stock, tick[-1].last_price))
+                log.info("=>%s的涨停价：%s" % (stock, tick[-1].upper_limit * threshold))        
                 stock_list2.append(stock)
         return stock_list2
     
@@ -378,9 +383,9 @@ class xiaoshizhi():
             position_list.append(position.exchange +'.'+position.sec_id)
         for stock in stock_list:
             tick=self.strategy.get_last_ticks(stock)
-            if stock in position_list or tick.last_price > tick.lower_limit * threshold:
-                log.info("=>%s的现价：%s" % (stock, tick.last_price))
-                log.info("=>%s的跌停价：%s" % (stock, tick.lower_limit  * threshold))        
+            if stock in position_list or tick[-1].last_price > tick[-1].lower_limit * threshold:
+                log.info("=>%s的现价：%s" % (stock, tick[-1].last_price))
+                log.info("=>%s的跌停价：%s" % (stock, tick[-1].lower_limit  * threshold))        
                 stock_list2.append(stock)
         return stock_list2
     
@@ -403,7 +408,7 @@ class xiaoshizhi():
             return [stock for stock in stock_list if stock not in blacklist]
         return stock_list
     
-    def filter_new(self,stock_list, context, data):
+    def filter_new(self,stock_list):
         '''
                         过滤新股
         
@@ -467,10 +472,10 @@ class xiaoshizhi():
                     low_price_130 = min(low_price)
                     high_price_130 = max(high_price)
                     avg_15 =  np.array(close_price)[-15:].mean()
-                    cur_price = self.strategy.get_last_ticks(stock).last_price
+                    cur_price = self.strategy.get_last_ticks(stock)[-1].last_price
                     score = (cur_price - low_price_130) + (cur_price - high_price_130) + (cur_price - avg_15)
                     dst_stocks[stock] = score
-                df = pd.DataFrame(dst_stocks.values(), index=dst_stocks.keys())
+                df = pd.DataFrame(list(dst_stocks.values()), index=dst_stocks.keys())
                 df.columns = ['score']
                 df = df.sort(columns='score', ascending=True)
                 log.info("<=个股评分结束")
@@ -725,7 +730,7 @@ class xiaoshizhi():
                         报单失败或者报单成功但被取消（此时成交量等于0），返回False
         '''
         tick=self.strategy.get_last_ticks(stock)
-        cur_price =tick.last_price
+        cur_price =tick[-1].last_price
         value=int(amout/cur_price);
         value=int(value/100)
         value=int(value*100)
@@ -862,10 +867,16 @@ class xiaoshizhi():
         while(n > 0):  # 如果前n日数据为nan，则取n-1日数据，直至n为1
             #close = attribute_history(security, n, unit, ('close'))['close'][0]
             if unit=='d':
-                bars=self.strategy.get_dailybars(security, dt1,dtn)
+                #bars=self.strategy.get_dailybars(security, dt1,dtn)
+                bars=self.strategy.get_last_n_dailybars(security, n)
+                for bar in bars:
+                    log.info('security的%s的值为%s'%(bar.strtime ,bar.close))
             elif unit=='m':
-                bars=self.strategy.get_bars(security,60, dt1,dtn)
-            close=bars[0].close;  
+                #bars=self.strategy.get_bars(security,60, dt1,dtn)
+                bars=self.strategy.get_last_n_bars(security, 60,n)
+                for bar in bars:
+                    log.info('security的当前值为%s'%(bar.close))
+            close=bars[-1].close;  
             if math.isnan(close):
                 n -= 1
             else:
@@ -912,6 +923,7 @@ class xiaoshizhi():
         list_all=list(set(list_sh).union(set(list_sz)))
         symbol_list=[]
         for instrument in list_all:
-            symbol_list.append(instrument.symbol)
+            if not instrument.symbol.split('.')[1].startswith('200') and not instrument.symbol.split('.')[1].startswith('900') :
+                symbol_list.append(instrument.symbol)
         return symbol_list;  
     
