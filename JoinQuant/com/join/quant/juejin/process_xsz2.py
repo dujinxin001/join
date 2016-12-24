@@ -67,13 +67,13 @@ class xiaoshizhi():
         #    log.info("取消未完成的订单: %s" % (_order.order_id))
     
     
-    def handle_data(self,bar,startDate,endDate):
+    def handle_data(self,bar):
         '''
         按分钟回测
         '''
         # for key in self.g.stop_loss_minute:
         #     self.g.stop_loss_minute[key][self.g.FUNC](context, data)
-        dt = datetime.datetime.fromtimestamp(bar.utc_time)
+        dt = datetime.datetime.utcfromtimestamp(bar.utc_time)
         dt = dt + datetime.timedelta(hours=8)
         hour = dt.hour
         minute = dt.minute
@@ -277,7 +277,7 @@ class xiaoshizhi():
         return stock_list[:self.g.param['buy_stock_count'][self.g.VALUE]]
     
     
-    def filter_by_query(self,stock_list,startDate,endDate):
+    def filter_by_query(self,stock_list):
         '''
                         查询财务数据库过滤
         '''
@@ -288,7 +288,7 @@ class xiaoshizhi():
         
         #过滤PE
         if self.g.param['pick_by_pe'][self.g.VALUE]:
-            market_list=self.strategy.get_market_index(','.join(stock_list),startDate,endDate)
+            market_list=self.strategy.get_last_market_index(','.join(stock_list))
             stock_list=[market.symbol for market in market_list if market.pe_ratio>pe_min and market.pe_ratio<pe_max]
         
         #过滤EPS
@@ -462,7 +462,7 @@ class xiaoshizhi():
     
     #### stop loss ####
     
-    def stop_loss_by_price(self,startDate,endDate):
+    def stop_loss_by_price(self):
         '''
                         大盘指数前130日内最高价超过最低价2倍，则清仓止损
                         基于历史数据判定，因此若状态满足，则当天都不会变化
@@ -904,6 +904,3 @@ class xiaoshizhi():
                 if not instrument.symbol.split('.')[-1].startswith('200') 
                 and not instrument.symbol.split('.')[-1].startswith('900')]
     
-    def reversed_list(self,reverse):
-        reverse=reverse[::-1][0:10][::-1]
-        return reverse

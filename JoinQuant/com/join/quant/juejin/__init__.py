@@ -1,9 +1,7 @@
 from com.join.quant.juejin.model import Mystrategy
 if __name__ == '__main__':
-    myStrategy = Mystrategy(3333333)
-    myStrategy.on_login()
-    myStrategy.on_error(122, 'dsds')
-    myStrategy.on_tick(1)
-    print(myStrategy.position)
-    print('111'+'.'+'dddd')
+    aaa=['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22']
+    print(reversed_list(aaa))
     
+def reversed_list(reverse):
+        reverse=reverse[::-1][0:10][::-1]
