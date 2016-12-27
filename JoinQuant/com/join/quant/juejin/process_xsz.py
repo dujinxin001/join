@@ -311,6 +311,16 @@ class xiaoshizhi():
                         过滤停牌股票
         '''
         log.info("=>开始执行过滤停牌的股票%s" % stock_list)
+        dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, 0),self.pre_days(now_date, 0))
+        dic={}
+        for m in dailybars:
+            if m.symbol in dic.keys():
+                a={m.pub_date:m}
+                dic[m.symbol].update(a)
+            else:
+                a={m.pub_date:m}
+                #array.append(list(m.pub_date+','+str(m.market_value)))
+                dic[m.symbol]=a
         stock_list=[stock for stock in stock_list  
                     if len(self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1)))>0 
                     and len(self.strategy.get_last_n_dailybars(stock,1,self.pre_days(now_date, -1)))>0]
@@ -929,3 +939,16 @@ class xiaoshizhi():
     def pre_second(self,date,n):
         new_date=datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
         return (new_date+datetime.timedelta(seconds=n)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    def aaa(self,list_data):
+        dic={}
+        for m in list_data:
+            #print(m.symbol+','+str(m.market_value))
+            if m.symbol in dic.keys():
+                a={m.pub_date:m}
+                dic[m.symbol].update(a)
+            else:
+                a={m.pub_date:m}
+                #array.append(list(m.pub_date+','+str(m.market_value)))
+                dic[m.symbol]=a
+           
