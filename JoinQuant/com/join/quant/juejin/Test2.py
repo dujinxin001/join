@@ -64,10 +64,10 @@ if __name__ == '__main__':
     endDate=strBarDate.strftime('%Y-%m-%d')
     listaa=myStrategy.get_market_index('SHSE.600000,SHSE.600010,SHSE.600399', startDate, startDate)
     list2=myStrategy.get_financial_index('SHSE.600000,SHSE.600010,SHSE.600399', '2016-06-08 9:31:00', '2016-07-31 9:31:00')
-    list3=myStrategy.get_dailybars('SHSE.600000,SHSE.600010','2016-12-23','2016-12-23')
-    for a in list3:
-        log.info(list3[0].strtime)
-        log.info(a.strtime)
+    list_bar=myStrategy.get_bars('SHSE.600791',60,'2016-11-17 14:47:00', '2016-11-17 14:49:00')
+    for a in list_bar:
+        log.info(list_bar[0].close)
+        log.info(a.close )
     dic={}
     for m in listaa:
         #print(m.symbol+','+str(m.market_value))

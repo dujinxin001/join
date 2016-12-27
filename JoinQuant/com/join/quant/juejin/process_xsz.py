@@ -5,6 +5,7 @@ import datetime
 from com.join.quant.juejin.blacklist import get_blacklist
 from com.join.quant.juejin.GObject import MyClass
 import logging as log
+from math import isnan
 
 class xiaoshizhi():
     global g
@@ -311,21 +312,6 @@ class xiaoshizhi():
                         过滤停牌股票
         '''
         log.info("=>开始执行过滤停牌的股票%s" % stock_list)
-<<<<<<< HEAD
-        dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, 0),self.pre_days(now_date, 0))
-        dic={}
-        for m in dailybars:
-            if m.symbol in dic.keys():
-                a={m.pub_date:m}
-                dic[m.symbol].update(a)
-            else:
-                a={m.pub_date:m}
-                #array.append(list(m.pub_date+','+str(m.market_value)))
-                dic[m.symbol]=a
-        stock_list=[stock for stock in stock_list  
-                    if len(self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1)))>0 
-                    and len(self.strategy.get_last_n_dailybars(stock,1,self.pre_days(now_date, -1)))>0]
-=======
         list_bar=self.strategy.get_bars(','.join(stock_list),60,now_date,now_date)
         dic={}
         for bar in list_bar:
@@ -351,7 +337,6 @@ class xiaoshizhi():
         df2 = pd.DataFrame(dic2)
         #stock_list=[stock for stock in stock_list  if len(df[stock])>0 and len(df2[stock])>0]
         stock_list=list(set(list(df.columns)) & set(list(df2.columns)))
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
         return stock_list
     
     
@@ -388,7 +373,7 @@ class xiaoshizhi():
         log.info("=>开始执行过滤涨停的股票%s" % stock_list) 
         threshold = 1.00
         # 已存在于持仓的股票即使涨停也不过滤，避免此股票再次可买，但因被过滤而导致选择别的股票
-        list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -1),self.pre_minute(now_date, -1))
+        list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
         dic={}
         for bar in list_bar:
             key=bar.exchange+'.'+bar.sec_id
@@ -399,20 +384,22 @@ class xiaoshizhi():
                 a={bar.strendtime :bar.close}
                 dic[key]=a
         df = pd.DataFrame(dic)
-        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -1),self.pre_days(now_date, -1))
+        df=df.fillna(method='pad')
+        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -3),self.pre_days(now_date, 0))
         dic2={}
         for daily in list_daily:
             key=daily.exchange+'.'+daily.sec_id
             if key in dic2.keys():
-                a={daily.strtime  :daily.close}
+                a={daily.strtime  :daily.pre_close}
                 dic2[key].update(a)
             else:
-                a={bar.strtime  :daily.close}
+                a={bar.strtime  :daily.pre_close}
                 dic2[key]=a
         df2 = pd.DataFrame(dic2)
+        df2=df2.fillna(method='pad')
         stock_list=[stock for stock in stock_list  
                     if stock in [position.exchange +'.'+position.sec_id for position in self.strategy.get_positions()] 
-                    or df[stock][0] < df2[stock][0] * (threshold+0.097)]
+                    or df[stock][-1] < df2[stock][-1] * (threshold+0.097)]
         return stock_list
     
     
@@ -422,10 +409,33 @@ class xiaoshizhi():
         '''
         log.info("=>开始执行过滤跌停的股票%s" % stock_list)
         threshold = 1.00
+        list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
+        dic={}
+        for bar in list_bar:
+            key=bar.exchange+'.'+bar.sec_id
+            if key in dic.keys():
+                a={bar.strendtime :bar.close}
+                dic[key].update(a)
+            else:
+                a={bar.strendtime :bar.close}
+                dic[key]=a
+        df = pd.DataFrame(dic)
+        df=df.fillna(method='pad')
+        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -3),self.pre_days(now_date, 0))
+        dic2={}
+        for daily in list_daily:
+            key=daily.exchange+'.'+daily.sec_id
+            if key in dic2.keys():
+                a={daily.strtime  :daily.pre_close}
+                dic2[key].update(a)
+            else:
+                a={bar.strtime  :daily.pre_close}
+                dic2[key]=a
+        df2 = pd.DataFrame(dic2)
+        df2=df2.fillna(method='pad')
         stock_list=[stock for stock in stock_list  
                     if stock in [position.exchange +'.'+position.sec_id for position in self.strategy.get_positions()] 
-                    or self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1))[-1].close > 
-                    (self.strategy.get_last_n_dailybars(stock,1,self.pre_days(now_date, -1))[-1].close * (threshold-0.097))]
+                    or df[stock][-1] > df2[stock][-1] * (threshold-0.097)]
         return stock_list
     
     def filter_by_growth_rate(self,stock_list):
@@ -497,29 +507,59 @@ class xiaoshizhi():
                 stock_list = stock_list[:self.g.param['rank_stock_count'][self.g.VALUE]]
             if len(stock_list) > 0:
                 dst_stocks = {}
+                list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -1),self.pre_minute(now_date, -1))
+                bar_dic={}
+                for bar in list_bar:
+                    key=bar.exchange+'.'+bar.sec_id
+                    if key in bar_dic.keys():
+                        a={bar.strendtime :bar.close}
+                        bar_dic[key].update(a)
+                    else:
+                        a={bar.strendtime :bar.close}
+                        bar_dic[key]=a
+                bar_df = pd.DataFrame(bar_dic)               
+                
+                dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -200),self.pre_days(now_date, -1))
+                daily_dic={}
+                for dailybar in dailybars:
+                    key=dailybar.exchange+'.'+dailybar.sec_id
+                    if key in daily_dic.keys():
+                        a={dailybar.strtime :dailybar}
+                        daily_dic[key].update(a)
+                    else:
+                        a={dailybar.strtime :dailybar}
+                        daily_dic[key]=a
+                df_daily = pd.DataFrame(daily_dic)
+                df_daily=df_daily.fillna(method='pad')
+                df_daily=df_daily.fillna(method='bfill')
+                #log.info(df)
                 for stock in stock_list:
-                    dailybars=self.strategy.get_last_n_dailybars(stock, 130,self.pre_days(now_date, -1))
+                    #log.info(df[stock])
+                    #dailybars=self.strategy.get_last_n_dailybars(stock, 130,self.pre_days(now_date, -1))
                     #dailybars=self.reversed_list(dailybars, 130)
                     #h = attribute_history(stock, 130, unit='1d', fields=('close', 'high', 'low'), skip_paused=True)
                     low_price=[]
                     high_price=[]
                     close_price=[]
-                    log.info('%s:aaaaa=%s'%(stock,len(dailybars)))
-                    for dailybar in dailybars:
+                    dailybars_130=self.reversed_list(list(df_daily[stock]), 130)
+                    for dailybar in dailybars_130:
+                        #if dailybar!= 0:
                         low_price.append(dailybar.low)
                         high_price.append(dailybar.high)
                         close_price.append(dailybar.close)
                     low_price_130 = min(low_price)
                     high_price_130 = max(high_price)
                     avg_15 =  np.array(close_price)[-15:].mean()
-                    cur_price = self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1))[0].close
+                    #cur_price = self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1))[0].close
+                    cur_price=bar_df[stock][-1]
                     score = (cur_price - low_price_130) + (cur_price - high_price_130) + (cur_price - avg_15)
                     dst_stocks[stock] = score
                 df = pd.DataFrame(list(dst_stocks.values()), index=dst_stocks.keys())
                 df.columns = ['score']
                 df = df.sort(columns='score', ascending=True)
-                log.info("<=个股评分结束")
-                return list(df.index)
+                stock_list=list(df.index)
+                log.info("<=个股评分结束%s"%stock_list)
+                return stock_list
     
     #### stop loss ####
     
@@ -989,15 +1029,3 @@ class xiaoshizhi():
         new_date=datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
         return (new_date+datetime.timedelta(seconds=n)).strftime('%Y-%m-%d %H:%M:%S')
     
-    def aaa(self,list_data):
-        dic={}
-        for m in list_data:
-            #print(m.symbol+','+str(m.market_value))
-            if m.symbol in dic.keys():
-                a={m.pub_date:m}
-                dic[m.symbol].update(a)
-            else:
-                a={m.pub_date:m}
-                #array.append(list(m.pub_date+','+str(m.market_value)))
-                dic[m.symbol]=a
-           
