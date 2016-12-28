@@ -165,7 +165,7 @@ def set_param(context):
     p['period'] = (3, '调仓频率，单位：日')
     p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
     p['pick_by_pe'] = (False, '是否根据PE选股')
-    p['pick_by_eps'] = (True, '是否根据EPS选股')
+    p['pick_by_eps'] = (False, '是否根据EPS选股')
     p['pick_stock_count'] = (100, '备选股票数目')
     p['filter_gem'] = (True, '是否过滤创业板股票')
     p['filter_blacklist'] = (True, '是否过滤黑名单股票，回测建议关闭，模拟运行时开启')
@@ -226,7 +226,7 @@ def set_cache(context):
     # 缓存股票持仓后的最高价
     c['last_high'] = {}
 
-    df = get_fundamentals(query())
+    df = get_fundamentals(query)
     c['stock_list'] = df.columns.values
 
     # 缓存当日个股250天内最大的3日涨幅，避免当日反复获取，每日盘后清空
@@ -296,12 +296,13 @@ def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
     '''
-    #logger.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
+    logger.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
     pe_min = 0
     pe_max = 200
     eps_min = 0
 
-    q = query().filter(fundamentals.stockcode.in_(stock_list))
+    stock_list=['300029.XSHE']
+    q = query(fundamentals.eod_derivative_indicator.market_cap,fundamentals.financial_indicator.earnings_per_share).filter(fundamentals.stockcode.in_(stock_list))
     if context.param['pick_by_pe'][context.VALUE]:
         q = q.filter(
             fundamentals.eod_derivative_indicator.pe_ratio > pe_min,
@@ -315,10 +316,10 @@ def filter_by_query(stock_list, context, data):
                    ).limit(
             context.param['pick_stock_count'][context.VALUE]
         ))
-    #logger.info("=>结束执行财务条件过滤%s"%list(df.columns.values))
-    #list1=list(df.columns.values)
-    #for s in list1:
-        #logger.info("=>结束执行财务条件过滤：%s"%instruments(s).symbol)
+    list1=list(df.columns.values)
+    logger.info("=>结束执行财务条件过滤%s"%df)
+    for s in list1:
+        logger.info("=>结束执行财务条件过滤：%s,%s"%(instruments(s).symbol,df[s]))
     return list(df.columns.values)
 
 
