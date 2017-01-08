@@ -507,7 +507,7 @@ class xiaoshizhi():
                 stock_list = stock_list[:self.g.param['rank_stock_count'][self.g.VALUE]]
             if len(stock_list) > 0:
                 dst_stocks = {}
-                list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -1),self.pre_minute(now_date, -1))
+                list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
                 bar_dic={}
                 for bar in list_bar:
                     key=bar.exchange+'.'+bar.sec_id
@@ -517,7 +517,8 @@ class xiaoshizhi():
                     else:
                         a={bar.strendtime :bar.close}
                         bar_dic[key]=a
-                bar_df = pd.DataFrame(bar_dic)               
+                bar_df = pd.DataFrame(bar_dic)
+                bar_df=bar_df.fillna(method='pad')    
                 
                 dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -200),self.pre_days(now_date, -1))
                 daily_dic={}
