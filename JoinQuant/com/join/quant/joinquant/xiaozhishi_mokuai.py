@@ -386,8 +386,13 @@ def filter_by_query(stock_list, context, data):
     pe_max = 200
     eps_min = 0
 
+<<<<<<< HEAD
     q = query(valuation.code).filter(valuation.code.in_(stock_list))
     #q=query(valuation).filter(valuation.market_cap>=50,valuation.code.in_(stock_list))
+=======
+    stock_list=['300029.XSHE']
+    q = query(valuation.code,valuation.market_cap,indicator.eps).filter(valuation.code.in_(stock_list))
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if g.param['pick_by_pe'][g.VALUE]:
         q = q.filter(
             valuation.pe_ratio > pe_min,
@@ -401,7 +406,17 @@ def filter_by_query(stock_list, context, data):
                    ).limit(
             g.param['pick_stock_count'][g.VALUE]
         ))
+<<<<<<< HEAD
 
+=======
+    list1=list(df['code'])
+    list2=list(df['market_cap'])
+    log.info("=>结束执行财务条件过滤%s"%df)
+    index=0
+    for s in list1:
+        log.info("=>结束执行财务条件过滤:%s:%s:%s"%(s,get_security_info(s).display_name,list2[index]))
+        index=index+1
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     return list(df['code'])
 
 
