@@ -165,7 +165,7 @@ def set_param(context):
     p['period'] = (3, '调仓频率，单位：日')
     p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
     p['pick_by_pe'] = (False, '是否根据PE选股')
-    p['pick_by_eps'] = (False, '是否根据EPS选股')
+    p['pick_by_eps'] = (True, '是否根据EPS选股')
     p['pick_stock_count'] = (100, '备选股票数目')
     p['filter_gem'] = (True, '是否过滤创业板股票')
     p['filter_blacklist'] = (True, '是否过滤黑名单股票，回测建议关闭，模拟运行时开启')
@@ -173,7 +173,7 @@ def set_param(context):
     p['is_rank_stock'] = (True, '是否对股票评分')
     p['rank_stock_count'] = (20, '参与评分的股票数目')  # 评分的股票数目不能大于备选股票数目
     p['index_l'] = ('000016.XSHG', '大盘股指数')  # 上证50指数
-    p['index_s']=('000905.XSHG','小盘股指数') # 中证500指数
+    p['index_s']=('399678.XSHG','小盘股指数') # 中证500指数
     p['buy_stock_count'] = (2, '买入股票数目')
     p['index_growth_rate'] = (0.005, '判定调仓的二八指数n日增幅')  # n = 20
     p['index_3_crows'] = ('000300.XSHG', '判定三黑鸦的指数')
@@ -296,22 +296,13 @@ def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
     '''
-<<<<<<< HEAD
     logger.info("=>开始执行财务条件过滤")
-=======
-    logger.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     pe_min = 0
     pe_max = 200
     eps_min = 0
 
-<<<<<<< HEAD
     #stock_list=['300029.XSHE']
     q = query(fundamentals.eod_derivative_indicator.market_cap).filter(fundamentals.stockcode.in_(stock_list))
-=======
-    stock_list=['300029.XSHE']
-    q = query(fundamentals.eod_derivative_indicator.market_cap,fundamentals.financial_indicator.earnings_per_share).filter(fundamentals.stockcode.in_(stock_list))
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if context.param['pick_by_pe'][context.VALUE]:
         q = q.filter(
             fundamentals.eod_derivative_indicator.pe_ratio > pe_min,
@@ -325,14 +316,7 @@ def filter_by_query(stock_list, context, data):
                    ).limit(
             context.param['pick_stock_count'][context.VALUE]
         ))
-<<<<<<< HEAD
     logger.info("=>结束执行财务条件过滤")
-=======
-    list1=list(df.columns.values)
-    logger.info("=>结束执行财务条件过滤%s"%df)
-    for s in list1:
-        logger.info("=>结束执行财务条件过滤：%s,%s"%(instruments(s).symbol,df[s]))
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     return list(df.columns.values)
 
 

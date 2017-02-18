@@ -517,13 +517,8 @@ class xiaoshizhi():
                     else:
                         a={bar.strendtime :bar.close}
                         bar_dic[key]=a
-<<<<<<< HEAD
                 bar_df = pd.DataFrame(bar_dic)               
                 bar_df=bar_df.fillna(method='pad')
-=======
-                bar_df = pd.DataFrame(bar_dic)
-                bar_df=bar_df.fillna(method='pad')    
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
                 
                 dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -200),self.pre_days(now_date, -1))
                 daily_dic={}
