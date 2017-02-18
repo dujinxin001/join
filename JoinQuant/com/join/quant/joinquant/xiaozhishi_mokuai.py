@@ -29,6 +29,7 @@ from blacklist import *
 import math
 import tradestat
 import talib as tl
+import shipane_sdk
 
 
 def initialize(context):
@@ -61,10 +62,20 @@ def initialize(context):
 
 def process_initialize(context):
     log_section('process_initialize','进程重新启动')
+    # 创建 JoinQuantExecutor 对象
+    # 可选参数包括：host, port, key, client, timeout 等
+    # 请将下面的 IP 替换为实际 IP
+    g.executor = shipane_sdk.JoinQuantExecutor(
+        host='106.15.37.132',
+        port=11788,
+        key='',
+        client=''
+    )
 
 
 def after_code_changed(context):
     log_section('after_code_changed','代码发生修改')
+    
 
 
 def before_trading_start(context):
@@ -125,9 +136,13 @@ def _adjust_position(context, data):
     else:
         if g.cache['day_count'] % g.param['period'][g.VALUE] == 0:
             log.info("==> 满足条件进行调仓")
+            if gr_index_l > g.param['index_growth_rate'][g.VALUE] and gr_index_s < g.param['index_growth_rate'][g.VALUE]:
+                stock_list = g.cache['stock_list']
+                g.cache['stock_list']=filter_by_growth_rate(stock_list, context, data)
             buy_stocks = pick_stocks(context, data)
             if len(buy_stocks)==0:
                 log.info("选股后无买股票: %s" %(buy_stocks))
+                position_adjust(context, buy_stocks)
                 g.cache['day_count']=0
                 return
             log.info("选股后可买股票: %s" % (buy_stocks))
@@ -172,22 +187,22 @@ def set_const():
 def set_param():
     p = {}
 
-    p['period'] = (3, '调仓频率，单位：日')
+    p['period'] = (4, '调仓频率，单位：日')
     p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
     p['pick_by_pe'] = (False, '是否根据PE选股')
     p['pick_by_eps'] = (True, '是否根据EPS选股')
     p['pick_stock_count'] = (100, '备选股票数目')
     p['filter_gem'] = (True, '是否过滤创业板股票')
-    p['filter_blacklist'] = (True, '是否过滤黑名单股票，回测建议关闭，模拟运行时开启')
+    p['filter_blacklist'] = (False, '是否过滤黑名单股票，回测建议关闭，模拟运行时开启')
     p['is_filter_new']=(False,'是否过滤新股')
     p['is_rank_stock'] = (True, '是否对股票评分')
     p['rank_stock_count'] = (20, '参与评分的股票数目')  # 评分的股票数目不能大于备选股票数目
     p['index_l'] = ('000016.XSHG', '大盘股指数')  # 上证50指数
-    p['index_s']=('000905.XSHG','小盘股指数') # 中证500指数
+    p['index_s']=('399678.XSHE','小盘股指数') # 中证500指数
     p['buy_stock_count'] = (2, '买入股票数目')
     p['index_growth_rate'] = (0.005, '判定调仓的二八指数n日增幅')  # n = 20
     p['index_3_crows'] = ('000300.XSHG', '判定三黑鸦的指数')
-    p['index_price'] = ('000300.XSHG', '判定价格止损的指数')
+    p['index_price'] = ('399678.XSHE', '判定价格止损的指数')
     p['is_stock_stop_loss']=(False,'是否个股止损')
     p['is_stock_stop_profit']=(False,'是否个股止盈')
     p['is_market_stop_loss_by_price'] = (True,'是否根据大盘历史价格止损')
@@ -201,6 +216,9 @@ def set_filter():
     # g.filter={}
     g.filter = []
     #func_register(g.filter, filter_market_time, '指数MACD过滤')
+    #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
+    #func_register(g.filter, filter_by_20, '20日线过滤器')
+    #func_register(g.filter, filter_old_stock, '过滤上市超过一年的')
     func_register(g.filter, filter_by_query, '查询财务数据库过滤')
     func_register(g.filter, filter_gem, '过滤创业版股票')
     func_register(g.filter, filter_paused, '过滤停牌股票')
@@ -208,12 +226,14 @@ def set_filter():
     func_register(g.filter, filter_limitup, '过滤涨停的股票')
     func_register(g.filter, filter_limitdown, '过滤跌停的股票')
     func_register(g.filter,filter_blacklist, '过滤黑名单股票')
-    #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
     func_register(g.filter,filter_new, '过滤新股')
+    #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
+    #func_register(g.filter, filter_by_20, '20日线过滤器')
     #func_register(g.filter,filter_by_chaodie, '超跌过滤器')
     #func_register(g.filter, delect_stock, 'delect_stock')
     #func_register(g.filter, filter_by_rank_0, '市值评分过滤器')
     func_register(g.filter, filter_by_rank, '评分过滤器')
+    #func_register(g.filter, cow_stock_value, '脉冲过滤')
 
 
 def set_stop_loss():
@@ -238,6 +258,7 @@ def set_cache():
 
     df = get_fundamentals(query(valuation.code))
     c['stock_list'] = list(df['code'])
+    #c['stock_list'] =get_index_stocks('000300.XSHG')
 
     # 缓存当日个股250天内最大的3日涨幅，避免当日反复获取，每日盘后清空
     c['pct_change'] = {}
@@ -247,7 +268,6 @@ def set_cache():
     c['is_last_day_3_crows'] = False
     c['is_day_stop_loss_by_price'] = False
     c['stop_trade'] = False  # 暂停当天交易
-
     g.cache = c
 
 
@@ -258,6 +278,7 @@ def reset_day_param():
     log.info("=>盘后重置当日参数")
     df = get_fundamentals(query(valuation.code))
     g.cache['stock_list'] = list(df['code'])
+    #g.cache['stock_list']=get_index_stocks('000300.XSHG')
     # 重置当日大盘价格止损状态
     g.cache['is_day_stop_loss_by_price'] = False
 
@@ -293,16 +314,85 @@ def pick_stocks(context, data):
     return stock_list[:g.param['buy_stock_count'][g.VALUE]]
 
 
+def cow_stock_value(stock_list, context, data):
+    log.info("=>开始执行脉冲过滤")
+    df = get_fundamentals(query(
+                                valuation.code, valuation.pb_ratio, valuation.circulating_market_cap
+                            ).filter(
+                                valuation.code.in_(stock_list),
+                                valuation.circulating_market_cap <= 100
+                            ))
+    log.info("=>开始执行脉冲过滤2")
+    df.index = df['code']
+    del df['code']
+    s_fall = fall_money_day_3line(df.index.tolist(), 120, 20, 60, 160)
+    log.info("=>开始执行脉冲过滤3")
+    s_cross = money_5_cross_60(df.index.tolist(), 120)
+    log.info("=>开始执行脉冲过滤4")
+    df = pd.concat([df, s_fall, s_cross], axis=1, join='inner')
+    log.info("=>开始执行脉冲过滤5")
+    df.columns = ['pb', 'cap', 'fall', 'cross']
+    df['score'] = df['fall'] * df['cross'] / (df['pb']*(df['cap']**0.5))
+    df.sort(['score'], ascending=True, inplace=True)
+    log.info("=>开始执行脉冲过滤6")
+    log.info("=>结束执行脉冲过滤%s" %df)
+    return df.index.tolist()
+
+
+def money_5_cross_60(security_list,n, n1=5, n2=60):
+    def money_5_cross_60_count(money, n, n1, n2):
+        i = 0
+        count = 0
+        while i < n :
+            money_MA60 = money[i+1:n2+i].mean()
+            money_MA60_before = money[i:n2-1+i].mean()
+            money_MA5 = money[i+1+n2-n1:n2+i].mean()
+            money_MA5_before = money[i+n2-n1:n2-1+i].mean()
+            if (money_MA60_before-money_MA5_before)*(money_MA60-money_MA5) < 0 : 
+                count=count+1
+            i = i + 1
+        return count
+
+    df = history(n+n2+1, unit='1d', field='money', security_list=security_list, skip_paused=True)
+    s = df.apply(money_5_cross_60_count, args=(n,n1,n2,))
+    return s
+
+def fall_money_day_3line(security_list,n, n1=20, n2=60, n3=160):
+    def fall_money_count(money, n, n1, n2, n3):
+        i = 0
+        count = 0
+        while i < n:
+            money_MA200 = money[i:n3-1+i].mean()
+            money_MA60 = money[i+n3-n2:n3-1+i].mean()
+            money_MA20 = money[i+n3-n1:n3-1+i].mean()
+            if money_MA20 <= money_MA60 and money_MA60 <= money_MA200 :
+                count = count + 1
+            i = i + 1
+        return count
+
+    df = history(n+n3, unit='1d', field='money', security_list=security_list, skip_paused=True)
+    log.info("=>1111111111111")
+    s = df.apply(fall_money_count, args=(n,n1,n2,n3,))
+    log.info("=>222222222")
+    return s
+
+
 def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
     '''
-    log.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
+    log.info("=>开始执行财务条件过滤")
     pe_min = 0
     pe_max = 200
     eps_min = 0
 
+<<<<<<< HEAD
     q = query(valuation.code).filter(valuation.code.in_(stock_list))
+    #q=query(valuation).filter(valuation.market_cap>=50,valuation.code.in_(stock_list))
+=======
+    stock_list=['300029.XSHE']
+    q = query(valuation.code,valuation.market_cap,indicator.eps).filter(valuation.code.in_(stock_list))
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if g.param['pick_by_pe'][g.VALUE]:
         q = q.filter(
             valuation.pe_ratio > pe_min,
@@ -310,16 +400,23 @@ def filter_by_query(stock_list, context, data):
         )
     if g.param['pick_by_eps'][g.VALUE]:
         q = q.filter(indicator.eps > eps_min)
-
+        
     df = get_fundamentals(
         q.order_by(valuation.market_cap.asc()
                    ).limit(
             g.param['pick_stock_count'][g.VALUE]
         ))
-    #log.info("=>结束执行财务条件过滤%s"%list(df['code']))
+<<<<<<< HEAD
+
+=======
     list1=list(df['code'])
+    list2=list(df['market_cap'])
+    log.info("=>结束执行财务条件过滤%s"%df)
+    index=0
     for s in list1:
-        log.info("=>结束执行财务条件过滤:%s"%get_security_info(s).display_name)
+        log.info("=>结束执行财务条件过滤:%s:%s:%s"%(s,get_security_info(s).display_name,list2[index]))
+        index=index+1
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     return list(df['code'])
 
 
@@ -358,7 +455,7 @@ def filter_paused(stock_list, context, data):
     '''
     过滤停牌股票
     '''
-    log.info("=>开始执行过滤停牌的股票%s"%stock_list)
+    log.info("=>开始执行过滤停牌的股票")
     current_data = get_current_data()
     return [stock for stock in stock_list if not current_data[stock].paused]
 
@@ -367,7 +464,7 @@ def filter_st(stock_list, context, data):
     '''
     过滤ST及其他具有退市标签的股票
     '''
-    log.info("=>开始执行过滤ST及其他具有退市标签的股票%s"%stock_list)
+    log.info("=>开始执行过滤ST及其他具有退市标签的股票")
     current_data = get_current_data()
     return [stock for stock in stock_list
             if not current_data[stock].is_st
@@ -379,7 +476,7 @@ def filter_gem(stock_list, context, data):
     过滤创业版股票
     '''
     if g.param['filter_gem'][g.VALUE]:
-        log.info("=>开始执行过滤创业板股票%s"%stock_list)
+        log.info("=>开始执行过滤创业板股票")
         return [stock for stock in stock_list if stock[0:3] != '300']
     return stock_list
 
@@ -388,30 +485,23 @@ def filter_limitup(stock_list, context, data):
     '''
     过滤涨停的股票
     '''
-    log.info("=>开始执行过滤涨停的股票%s"%stock_list)
+    log.info("=>开始执行过滤涨停的股票")
     threshold = 1.00
-    stock_list2=[]
     # last_prices = history(1, unit='1m', field='close',
     #                       security_list=stock_list)
 
     # 已存在于持仓的股票即使涨停也不过滤，避免此股票再次可买，但因被过滤而导致选择别的股票
     # return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
     #         or last_prices[stock][-1] < data[stock].high_limit * threshold]
-    for stock in stock_list:
-        if stock in context.portfolio.positions.keys() or data[stock].close < (data[stock].high_limit * threshold):
-            log.info("=>%s的现价：%s"%(stock,data[stock].close))
-            log.info("=>%s的涨停价：%s"%(stock,data[stock].high_limit * threshold))        
-            stock_list2.append(stock)
-    return stock_list2
-    #return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
-    #        or data[stock].close < data[stock].high_limit * threshold]
+    return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
+            or data[stock].close < data[stock].high_limit * threshold]
 
 
 def filter_limitdown(stock_list, context, data):
     '''
     过滤跌停的股票
     '''
-    log.info("=>开始执行过滤跌停的股票%s"%stock_list)
+    log.info("=>开始执行过滤跌停的股票")
     threshold = 1.00
     # last_prices = history(1, unit='1m', field='close',
     #                       security_list=stock_list)
@@ -426,7 +516,8 @@ def filter_by_growth_rate(stock_list, context, data):
     '''
     过滤n日增长率为负的股票
     '''
-    n = 20
+    log.info("=>开始过滤n日增长率为负的股票")
+    n = 25
     return [stock for stock in stock_list if get_growth_rate(stock, n) > 0]
 
 
@@ -435,7 +526,7 @@ def filter_blacklist(stock_list, context, data):
     过滤黑名单股票
     '''
     if g.param['filter_blacklist'][g.VALUE]:
-        log.info("=>开始过滤黑名单的股票%s"%stock_list)
+        log.info("=>开始过滤黑名单的股票")
         blacklist = get_blacklist()
         return [stock for stock in stock_list if stock not in blacklist]
     return stock_list
@@ -445,18 +536,47 @@ def filter_new(stock_list, context, data):
     过滤新股
     '''
     if g.param['is_filter_new'][g.VALUE]:
-        log.info("=>开始过滤新股%s"%stock_list)
+        log.info("=>开始过滤新股")
         delta = 60
         start_date = context.current_dt.date() - datetime.timedelta(delta)
         return [stock for stock in stock_list if get_security_info(stock).start_date < start_date]
     return stock_list
 
 
+def filter_old_stock(stock_list, context, data):
+    tmpList = []
+    for stock in stock_list :
+        days_public=(context.current_dt.date() - get_security_info(stock).start_date).days
+        # 上市未超过1年
+        if days_public < 365:
+            tmpList.append(stock)
+    return tmpList
+
+def filter_by_20(stock_list, context, data):
+    log.info("=>开始进行股票20日线过滤%s" %stock_list)
+    return [stock for stock in stock_list if  get_growth_rate(stock,25)>0]
+    #return [stock for stock in stock_list if (data[stock].mavg(20, field='close')-f_ref(stock,20))/20>0]
+    '''
+    for stock in stock_list:
+        ene=0.91*data[stock].mavg(10, field='close')
+        log.info("%s的ene值为：%s"%(stock,ene))
+        if data[stock].low<=ene:
+            stock_list2.append(stock);
+    return stock_list2
+    '''
+    #return [stock for stock in stock_list if ]
+       
+def f_ref(index,N):
+    h = attribute_history(index, N, '240m', ('close'))
+    return h['close'][0:N].mean()
+
 def filter_by_rank_0(stock_list, context, data):
     '''
     评分过滤器
     '''
     log.info("=>开始进行股票市值评分%s" %stock_list)
+    if len(stock_list) >g.param['rank_stock_count'][g.VALUE]:
+        stock_list = stock_list[:g.param['rank_stock_count'][g.VALUE]]
     if len(stock_list) > 0:
         dst_stocks = {}
         for stock in stock_list:
@@ -498,10 +618,6 @@ def filter_by_rank(stock_list, context, data):
         
                 avg_15 = data[stock].mavg(15, field='close')
                 cur_price = data[stock].close
-                log.info("=>%s130日最低价:%s"%(get_security_info(stock).display_name,low_price_130))
-                log.info("=>%s130日最高价:%s"%(get_security_info(stock).display_name,high_price_130))
-                log.info("=>%s15日平均价:%s"%(get_security_info(stock).display_name,avg_15))
-                log.info("=>%s当前价:%s"%(get_security_info(stock).display_name,cur_price))
         
                 # avg_15 = h['close'][-15:].mean()
                 # cur_price = get_close_price(stock, 1, '1m')
@@ -509,7 +625,6 @@ def filter_by_rank(stock_list, context, data):
                 score = (cur_price - low_price_130)+(cur_price - high_price_130)+(cur_price - avg_15)
                 # score = ((cur_price-low_price_130) + (cur_price-high_price_130) +
                 # (cur_price-avg_15)) / cur_price
-                log.info("=>%s评分结果:%s"%(get_security_info(stock).display_name,score))
                 dst_stocks[stock] = score
         
             df = pd.DataFrame(dst_stocks.values(), index=dst_stocks.keys())
@@ -859,6 +974,7 @@ def position_open(security, value):
         cur_price = get_close_price(security, 1, '1m')
         # cur_price = order.price
         g.cache['last_high'][security] = cur_price
+        g.__executor.execute(order)
         return True
     return False
 
@@ -877,7 +993,7 @@ def position_close(position):
             # 只要有成交，无论全部成交还是部分成交，则统计盈亏
             g.trade_stat.watch(security, order.filled,
                                position.avg_cost, position.price)
-
+            g.__executor.execute(order)
         if order.status == OrderStatus.held:
             # 全部成交则删除相关证券的最高价缓存
             if security in g.cache['last_high']:
@@ -917,9 +1033,8 @@ def position_adjust(context, buy_stocks):
     # 此处只根据可用金额平均分配购买，不能保证每个仓位平均分配
     position_count = len(context.portfolio.positions)
     count = g.param['buy_stock_count'][g.VALUE]
-    if count > position_count:
-        value = context.portfolio.cash / (count - position_count)
-
+    if len(buy_stocks) > position_count:
+        value = context.portfolio.cash / (len(buy_stocks) - position_count)
         for stock in buy_stocks:
             if context.portfolio.positions[stock].total_amount == 0:
                 if position_open(stock, value):
@@ -995,6 +1110,10 @@ def get_close_price(security, n, unit='1d'):
 def func_register(register, func, descr=''):
     register.append((func, descr))
 
+def remove_func_register(register, func, descr=''):
+    obj=(func, descr)
+    if obj in register:
+        register.remove(obj)
 
 #### log ####
 
