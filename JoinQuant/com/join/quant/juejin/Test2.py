@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from _operator import index
 import logging as log
+import tushare as ts
 
 class Mystrategy(StrategyBase):
     global xiaoshizhi
@@ -62,9 +63,16 @@ if __name__ == '__main__':
     #startDate=strBarDate- datetime.timedelta(minutes=1)
     startDate=strBarDate.strftime('%Y-%m-%d')
     endDate=strBarDate.strftime('%Y-%m-%d')
+<<<<<<< HEAD
     listaa=myStrategy.get_market_index('SHSE.600000,SHSE.600010,SHSE.600399', startDate, startDate)
     list2=myStrategy.get_financial_index('SHSE.600000,SHSE.600010,SHSE.600399', '2016-06-08', '2016-07-31')
+=======
+    listaa=myStrategy.get_market_index('SHSE.603520', '2016-03-09', '2016-03-09')
+    list2=myStrategy.get_financial_index('SHSE.603520', '2016-01-09', '2016-03-09')
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     list_bar=myStrategy.get_bars('SHSE.600791',60,'2016-11-17 14:47:00', '2016-11-17 14:49:00')
+    lis_ts=ts.get_stock_basics()
+    print(lis_ts['timeToMarket'][-1])
     for a in list_bar:
         log.info(list_bar[0].close)
         log.info(a.close )

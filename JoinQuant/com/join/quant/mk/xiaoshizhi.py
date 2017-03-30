@@ -183,11 +183,19 @@ def set_param(context):
     p['is_rank_stock'] = (True, '是否对股票评分')
     p['rank_stock_count'] = (20, '参与评分的股票数目')  # 评分的股票数目不能大于备选股票数目
     p['index_l'] = ('000016.XSHG', '大盘股指数')  # 上证50指数
+<<<<<<< HEAD
     p['index_s']=('399101.XSHE','小盘股指数') # 中证500指数
+=======
+    p['index_s']=('399678.XSHG','小盘股指数') # 中证500指数
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     p['buy_stock_count'] = (2, '买入股票数目')
     p['index_growth_rate'] = (0.005, '判定调仓的二八指数n日增幅')  # n = 20
     p['index_3_crows'] = ('000300.XSHG', '判定三黑鸦的指数')
+<<<<<<< HEAD
     p['index_price'] = ('399101.XSHE', '判定价格止损的指数')
+=======
+    p['index_price'] = ('000905.XSHG', '判定价格止损的指数')
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     p['is_stock_stop_loss']=(False,'是否个股止损')
     p['is_stock_stop_profit']=(False,'是否个股止盈')
     p['is_market_stop_loss_by_price'] = (True,'是否根据大盘历史价格止损')
@@ -847,7 +855,12 @@ def position_open(context,stock, value,bar_dict):
     报单失败或者报单成功但被取消（此时成交量等于0），返回False
     '''
     order = _order_target_value(stock, value,bar_dict)
+<<<<<<< HEAD
     logger.info("%s股票提交买单：%s"%(stock,order))
+=======
+    #if order != None and order.filled_quantity > 0:
+    logger.info("buyorder=%s"%order)
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if order.status==ORDER_STATUS.FILLED:
         # 报单成功并有成交则初始化最高价
         context.cache['buying_stocks'].append(stock)
@@ -865,7 +878,14 @@ def position_close(context,stock,position,bar_dict):
     报单失败或者报单成功但被取消（此时成交量等于0），或者报单非全部成交，返回False
     '''
     order = _order(stock, -position.sellable,bar_dict )  # 卖出可用仓位
+<<<<<<< HEAD
     logger.info("%s股票提交卖单=%s"%(stock,order))
+=======
+    #logger.info("orderId=%s"% orderId)
+    #order=get_order(orderId)
+    logger.info("sellorder=%s"% order)
+    #if order.filled_quantity > 0:
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if order.status==ORDER_STATUS.FILLED:
         # 只要有成交，无论全部成交还是部分成交，则统计盈亏
         logger.info("%s卖出成功,全部成交,均价=%s"%(stock,order.avg_price))
@@ -927,11 +947,19 @@ def position_adjust2(context ,bar_dict):
                 context.cache['selling_stocks'].remove(stock)
                 
                 
+<<<<<<< HEAD
     if len(buy_stocks)>0 and len(context.cache['selling_stocks'])==0:
+=======
+    if not len(context.cache['selling_stocks']):
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
         value = context.portfolio.cash /len(buy_stocks);
         for stock in buy_stocks:
             if stock not in context.cache['buying_stocks']:
+<<<<<<< HEAD
                 logger.info("开始买入股票：%s"%stock)
+=======
+                logger.info("开始买入股票=%s"%stock)
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
                 if position_open(context,stock, value,bar_dict):
                     logger.info("买入%s股票全部成交" %(stock))
        

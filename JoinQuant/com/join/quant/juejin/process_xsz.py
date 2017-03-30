@@ -1,5 +1,16 @@
+<<<<<<< HEAD
 '''
 二八小市值择时买卖
+=======
+import math
+import numpy as np
+import pandas as pd
+import datetime
+from com.join.quant.juejin.blacklist import get_blacklist
+from com.join.quant.juejin.GObject import MyClass
+import logging as log
+import tushare as ts
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
 
 配置指定频率的调仓日，在调仓日每日指定时间，计算所选大盘指数和所选小盘指数当前的20日涨
 幅，如果2个指数的20日涨幅有一个为正，则进行选股调仓，之后如此循环往复。
@@ -580,6 +591,7 @@ def filter_by_rank_0(stock_list, context, data):
             # (cur_price-avg_15)) / cur_price
             dst_stocks[stock] = score
     
+<<<<<<< HEAD
         df = pd.DataFrame(dst_stocks.values(), index=dst_stocks.keys())
         df.columns = ['score']
         df = df.sort(columns='score', ascending=True)
@@ -595,6 +607,270 @@ def filter_by_rank(stock_list, context, data):
         log.info("=>开始进行股票评分%s" %stock_list)
         if len(stock_list) >g.param['rank_stock_count'][g.VALUE]:
             stock_list = stock_list[:g.param['rank_stock_count'][g.VALUE]]
+=======
+    def set_cache(self):
+        c = {}
+    
+        # 调仓日计数器，单位：日
+        c['day_count'] = 0
+    
+        # 缓存股票持仓后的最高价
+        c['last_high'] = {}
+    
+        c['stock_list']=[]
+        #c['stock_list']=self.get_all_symbol(1, 1,now_date)
+    
+        # 缓存当日个股250天内最大的3日涨幅，避免当日反复获取，每日盘后清空
+        c['pct_change'] = {}
+        # 缓存指数下跌分钟数
+        c['minute_count_index_ls_drop'] = 0
+        c['minute_count_cur_drop'] = 0
+        c['is_last_day_3_crows'] = False
+        c['is_day_stop_loss_by_price'] = False
+        c['stop_trade'] = False  # 暂停当天交易
+    
+        self.g.cache = c
+    
+    
+    def reset_day_param(self,now_date):
+        '''
+                        重置当日参数，仅针对需要当日需要重置的参数
+        '''
+        log.info("=>重置当日参数")
+        self.g.cache['stock_list']=self.get_all_symbol(1, 1,now_date)
+        # 重置当日大盘价格止损状态
+        self.g.cache['is_day_stop_loss_by_price'] = False
+    
+        # 重置三黑鸦状态
+        self.g.cache['is_last_day_3_crows'] = False
+        self.g.cache['minute_count_cur_drop'] = 0
+        self.g.cache['minute_count_index_ls_drop'] = 0
+    
+        # 清空当日个股250天内最大的3日涨幅的缓存
+        self.g.cache['pct_change'].clear()
+    
+        self.g.cache['stop_trade'] = False  # 暂停当天交易
+    
+    
+    #### pick & filter ####
+    
+    
+    def pick_stocks(self,now_date):
+        '''
+                        选取指定数目的小市值股票，再进行过滤，最终挑选指定可买数目的股票
+        '''
+        stock_list = self.g.cache['stock_list']
+        # for key in self.g.filter.keys():
+        #     stock_list = self.g.filter[key][self.g.FUNC](stock_list, context, data)
+        for filter in self.g.filter:
+            stock_list = filter[self.g.FUNC](stock_list,now_date)
+            if len(stock_list) == 0:
+                log.info("股票被过滤没了")
+                return stock_list
+    
+        # 选取指定可买数目的股票
+        return stock_list[:self.g.param['buy_stock_count'][self.g.VALUE]]
+    
+    
+    def filter_by_query(self,stock_list,now_date):
+        '''
+                        查询财务数据库过滤
+        '''
+        log.info("=>开始执行财务条件过滤%s,%s" % (','.join(stock_list), len(stock_list)))
+        pe_min = 0
+        pe_max = 200
+        eps_min = 0
+        #过滤PE
+        if self.g.param['pick_by_pe'][self.g.VALUE]:
+            market_list=self.strategy.get_market_index(','.join(stock_list),now_date,now_date)
+            stock_list=[market.symbol for market in market_list if market.pe_ratio>pe_min and market.pe_ratio<pe_max]
+        
+        #过滤EPS
+        if self.g.param['pick_by_eps'][self.g.VALUE]:
+            financial_list=self.strategy.get_financial_index(','.join(stock_list),self.pre_days(now_date, -90),now_date)
+            stock_list=[financial.symbol for financial in financial_list if financial.eps>eps_min]
+            
+        #市值排序
+        market_list=self.strategy.get_market_index(','.join(stock_list),self.pre_days(now_date, 0),self.pre_days(now_date, 0))
+        market_dict={market.symbol:market.market_value for market in market_list}
+        
+        df = pd.DataFrame(list(market_dict.values()), index=market_dict.keys())
+        df.columns = ['market_score']
+        df = df.sort(columns='market_score', ascending=True)
+        stock_list=list(df.index)
+        stock_list=stock_list[0:self.g.param['pick_stock_count'][self.g.VALUE]]
+        log.info("=>结束执行财务条件过滤%s" % stock_list)
+        return stock_list
+    
+    def filter_paused(self,stock_list,now_date):
+        '''
+                        过滤停牌股票
+        '''
+        log.info("=>开始执行过滤停牌的股票%s" % stock_list)
+        list_bar=self.strategy.get_bars(','.join(stock_list),60,now_date,now_date)
+        dic={}
+        for bar in list_bar:
+            key=bar.exchange+'.'+bar.sec_id
+            if key in dic.keys():
+                a={bar.strendtime :bar.close}
+                dic[key].update(a)
+            else:
+                a={bar.strendtime :bar.close}
+                dic[key]=a
+        df = pd.DataFrame(dic)
+        
+        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, 0),self.pre_days(now_date, 0))
+        dic2={}
+        for daily in list_daily:
+            key=daily.exchange+'.'+daily.sec_id
+            if key in dic2.keys():
+                a={daily.strtime  :daily.close}
+                dic2[key].update(a)
+            else:
+                a={bar.strtime  :daily.close}
+                dic2[key]=a
+        df2 = pd.DataFrame(dic2)
+        #stock_list=[stock for stock in stock_list  if len(df[stock])>0 and len(df2[stock])>0]
+        stock_list=list(set(list(df.columns)) & set(list(df2.columns)))
+        return stock_list
+    
+    
+    def filter_st(self,stock_list,now_date):
+        '''
+                        过滤ST及其他具有退市标签的股票
+        '''
+        log.info("=>开始执行过滤ST及其他具有退市标签的股票%s" % stock_list)
+        list_sh=self.strategy.get_instruments('SHSE',1,1)
+        list_sz=self.strategy.get_instruments('SZSE', 1, 1)
+        list_all=list(set(list_sh).union(set(list_sz)))
+        tui_list=[]
+        for instrument in list_all:
+            if instrument.sec_name.startswith('退') or instrument.sec_name.startswith('st') or instrument.sec_name.startswith('ST') or instrument.sec_name.startswith('*'):
+                tui_list.append(instrument.symbol);
+        return [stock for stock in stock_list
+                if stock not in tui_list]
+    
+    
+    def filter_gem(self,stock_list,now_date):
+        '''
+                        过滤创业版股票
+        '''
+        if self.g.param['filter_gem'][self.g.VALUE]:
+            log.info("=>开始执行过滤创业板股票%s" % stock_list)
+            return [stock for stock in stock_list if not stock.split('.')[1].startswith('300')]
+        return stock_list
+    
+    
+    def filter_limitup(self,stock_list,now_date):
+        '''
+                        过滤涨停的股票
+        '''
+        log.info("=>开始执行过滤涨停的股票%s" % stock_list) 
+        threshold = 1.00
+        # 已存在于持仓的股票即使涨停也不过滤，避免此股票再次可买，但因被过滤而导致选择别的股票
+        list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
+        dic={}
+        for bar in list_bar:
+            key=bar.exchange+'.'+bar.sec_id
+            if key in dic.keys():
+                a={bar.strendtime :bar.close}
+                dic[key].update(a)
+            else:
+                a={bar.strendtime :bar.close}
+                dic[key]=a
+        df = pd.DataFrame(dic)
+        df=df.fillna(method='pad')
+        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date,0),self.pre_days(now_date, 0))
+        dic2={}
+        for daily in list_daily:
+            key=daily.exchange+'.'+daily.sec_id
+            if key in dic2.keys():
+                a={daily.strtime  :daily.pre_close}
+                dic2[key].update(a)
+            else:
+                a={bar.strtime  :daily.pre_close}
+                dic2[key]=a
+        df2 = pd.DataFrame(dic2)
+        df2=df2.fillna(method='pad')
+        stock_list=[stock for stock in stock_list  
+                    if stock in [position.exchange +'.'+position.sec_id for position in self.strategy.get_positions()] 
+                    or df[stock][-1] < df2[stock][-1] * (threshold+0.097)]
+        return stock_list
+    
+    
+    def filter_limitdown(self,stock_list,now_date):
+        '''
+                        过滤跌停的股票
+        '''
+        log.info("=>开始执行过滤跌停的股票%s" % stock_list)
+        threshold = 1.00
+        list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
+        dic={}
+        for bar in list_bar:
+            key=bar.exchange+'.'+bar.sec_id
+            if key in dic.keys():
+                a={bar.strendtime :bar.close}
+                dic[key].update(a)
+            else:
+                a={bar.strendtime :bar.close}
+                dic[key]=a
+        df = pd.DataFrame(dic)
+        df=df.fillna(method='pad')
+        list_daily=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, 0),self.pre_days(now_date, 0))
+        dic2={}
+        for daily in list_daily:
+            key=daily.exchange+'.'+daily.sec_id
+            if key in dic2.keys():
+                a={daily.strtime  :daily.pre_close}
+                dic2[key].update(a)
+            else:
+                a={bar.strtime  :daily.pre_close}
+                dic2[key]=a
+        df2 = pd.DataFrame(dic2)
+        df2=df2.fillna(method='pad')
+        stock_list=[stock for stock in stock_list  
+                    if stock in [position.exchange +'.'+position.sec_id for position in self.strategy.get_positions()] 
+                    or df[stock][-1] > df2[stock][-1] * (threshold-0.097)]
+        return stock_list
+    
+    def filter_by_growth_rate(self,stock_list):
+        '''
+                        过滤n日增长率为负的股票
+        '''
+        n = 20
+        return [stock for stock in stock_list if self.get_growth_rate(stock, n) > 0]
+    
+    
+    def filter_blacklist(self,stock_list,now_date):
+        '''
+                        过滤黑名单股票
+        '''
+        if self.g.param['filter_blacklist'][self.g.VALUE]:
+            log.info("=>开始过滤黑名单的股票%s" % stock_list)
+            blacklist = get_blacklist()
+            return [stock for stock in stock_list if stock not in blacklist]
+        return stock_list
+    
+    def filter_new(self,stock_list):
+        '''
+                        过滤新股
+        
+        if self.g.param['is_filter_new'][self.g.VALUE]:
+            log.info("=>开始过滤新股%s" % stock_list)
+            delta = 60
+            start_date = context.current_dt.date() - datetime.timedelta(delta)
+            return [stock for stock in stock_list if get_security_info(stock).start_date < start_date]
+        return stock_list
+        '''
+        pass
+    
+    
+    def filter_by_rank_0(self,stock_list, context, data):
+        '''
+                        评分过滤器
+        '''
+        log.info("=>开始进行股票市值评分%s" % stock_list)
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
         if len(stock_list) > 0:
             dst_stocks = {}
             for stock in stock_list:
@@ -618,6 +894,357 @@ def filter_by_rank(stock_list, context, data):
             df = df.sort(columns='score', ascending=True)
             log.info("<=个股评分结束")
             return df.index
+<<<<<<< HEAD
+=======
+    
+    
+    def filter_by_rank(self,stock_list,now_date):
+        '''
+                        评分过滤器
+        '''
+        if self.g.param['is_rank_stock'][self.g.VALUE]: 
+            log.info("=>开始进行股票评分%s" % stock_list)
+            if len(stock_list) > self.g.param['rank_stock_count'][self.g.VALUE]:
+                stock_list = stock_list[:self.g.param['rank_stock_count'][self.g.VALUE]]
+            if len(stock_list) > 0:
+                dst_stocks = {}
+                list_bar=self.strategy.get_bars(','.join(stock_list),60,self.pre_minute(now_date, -3),self.pre_minute(now_date, -1))
+                bar_dic={}
+                for bar in list_bar:
+                    key=bar.exchange+'.'+bar.sec_id
+                    if key in bar_dic.keys():
+                        a={bar.strendtime :bar.close}
+                        bar_dic[key].update(a)
+                    else:
+                        a={bar.strendtime :bar.close}
+                        bar_dic[key]=a
+                bar_df = pd.DataFrame(bar_dic)               
+                bar_df=bar_df.fillna(method='pad')
+                
+                dailybars=self.strategy.get_dailybars(','.join(stock_list),self.pre_days(now_date, -200),self.pre_days(now_date, -1))
+                daily_dic={}
+                for dailybar in dailybars:
+                    key=dailybar.exchange+'.'+dailybar.sec_id
+                    if key in daily_dic.keys():
+                        a={dailybar.strtime :dailybar}
+                        daily_dic[key].update(a)
+                    else:
+                        a={dailybar.strtime :dailybar}
+                        daily_dic[key]=a
+                df_daily = pd.DataFrame(daily_dic)
+                df_daily=df_daily.fillna(method='pad')
+                df_daily=df_daily.fillna(method='bfill')
+                #log.info(df)
+                for stock in stock_list:
+                    #log.info(df[stock])
+                    #dailybars=self.strategy.get_last_n_dailybars(stock, 130,self.pre_days(now_date, -1))
+                    #dailybars=self.reversed_list(dailybars, 130)
+                    #h = attribute_history(stock, 130, unit='1d', fields=('close', 'high', 'low'), skip_paused=True)
+                    low_price=[]
+                    high_price=[]
+                    close_price=[]
+                    dailybars_130=self.reversed_list(list(df_daily[stock]), 130)
+                    for dailybar in dailybars_130:
+                        #if dailybar!= 0:
+                        low_price.append(dailybar.low)
+                        high_price.append(dailybar.high)
+                        close_price.append(dailybar.close)
+                    low_price_130 = min(low_price)
+                    high_price_130 = max(high_price)
+                    avg_15 =  np.array(close_price)[-15:].mean()
+                    #cur_price = self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1))[0].close
+                    cur_price=bar_df[stock][-1]
+                    score = (cur_price - low_price_130) + (cur_price - high_price_130) + (cur_price - avg_15)
+                    dst_stocks[stock] = score
+                df = pd.DataFrame(list(dst_stocks.values()), index=dst_stocks.keys())
+                df.columns = ['score']
+                df = df.sort(columns='score', ascending=True)
+                stock_list=list(df.index)
+                log.info("<=个股评分结束%s"%stock_list)
+                return stock_list
+    
+    #### stop loss ####
+    
+    def stop_loss_by_price(self,now_date):
+        '''
+                        大盘指数前130日内最高价超过最低价2倍，则清仓止损
+                        基于历史数据判定，因此若状态满足，则当天都不会变化
+                        增加此止损，回撤降低，收益降低
+        '''
+        if self.g.param['is_market_stop_loss_by_price'][self.g.VALUE]:
+            index = self.g.param['index_price'][self.g.VALUE]
+            if not self.g.cache['is_day_stop_loss_by_price']:
+                dailybars=self.strategy.get_last_n_dailybars(index, 160,self.pre_days(now_date, -1))
+                #dailybars=self.reversed_list(dailybars, 160)
+                low_price=[]
+                high_price=[]
+                for dailybar in dailybars:
+                    low_price.append(dailybar.low)
+                    high_price.append(dailybar.high)
+                low_price = min(low_price)
+                high_price = max(high_price)
+                # if high_price > 2 * low_price:
+                if high_price > 2.2 * low_price \
+                        and dailybars[0].close < dailybars[4].close \
+                        and dailybars[0].close > dailybars[100].close:
+                    # 当日第一次输出日志
+                    log.info("==> 大盘止损，%s指数前130日内最高价超过最低价2倍, 最高价: %f, 最低价: %f" % (index, high_price, low_price))
+                    self.g.cache['is_day_stop_loss_by_price'] = True
+        
+            if self.g.cache['is_day_stop_loss_by_price']:
+                self.position_clear()
+                self.g.cache['day_count'] = 0
+                self.g.cache['stop_trade'] = True  # 暂停当天交易
+    
+        return self.g.cache['is_day_stop_loss_by_price']
+    
+    
+    def stop_loss_by_3_crows(self,now_date):
+        '''
+                            前日三黑鸦，累计当日大盘指数涨幅<0的分钟计数
+                            如果分钟计数超过值n，则开始进行三黑鸦止损
+                            避免无效三黑鸦乱止损
+        minute
+        '''
+        # 配置三黑鸦判定指数，默认为上证指数，可修改为其他指数
+        index = self.g.param['index_3_crows'][self.g.VALUE]
+        # 配置是否开启大盘三黑鸦止损
+        # 个人认为针对大盘判断三黑鸦效果并不好，首先有效三只乌鸦难以判断，准确率实际来看也不好，
+        # 其次，分析历史行情看一般大盘出现三只乌鸦的时候，已经严重滞后了，使用其他止损方式可能会更好
+        n = 60
+        if self.g.param['is_market_stop_loss_by_3_black_crows'][self.g.VALUE]: 
+            if self.g.cache['is_last_day_3_crows']:
+                if self.get_growth_rate(index, 1,now_date) < 0:
+                    self.g.cache['minute_count_cur_drop'] += 1
+                if self.g.cache['minute_count_cur_drop'] >= n:
+                    if self.g.cache['minute_count_cur_drop'] == n:
+                        log.info("==> 当日%s增幅 < 0 已超过%d分钟，执行三黑鸦止损" % (index, n))
+        
+                    self.position_clear()
+                    self.g.cache['day_count'] = 0
+                    self.g.cache['stop_trade'] = True  # 暂停当天交易
+                    return True
+            return False
+        return False
+    
+    
+    def _is_3_crows(self,stock,now_date):
+        # talib.CDL3BLACKCROWS
+    
+        # 三只乌鸦说明来自百度百科
+        # 1. 连续出现三根阴线，每天的收盘价均低于上一日的收盘
+        # 2. 三根阴线前一天的市场趋势应该为上涨
+        # 3. 三根阴线必须为长的黑色实体，且长度应该大致相等
+        # 4. 收盘价接近每日的最低价位
+        # 5. 每日的开盘价都在上根K线的实体部分之内；
+        # 6. 第一根阴线的实体部分，最好低于上日的最高价位
+        #
+        # 算法
+        # 有效三只乌鸦描述众说纷纭，这里放宽条件，只考虑1和2
+        # 根据前4日数据判断
+        # 3根阴线跌幅超过4.5%（此条件忽略）
+        log.info("=>盘前判断三黑鸭状态")
+        dailybars=self.strategy.get_last_n_dailybars(stock, 4,self.pre_days(now_date, -1))
+        h_close=[]
+        h_open=[]
+        for dailybar in dailybars:
+            h_close.append(dailybar.close)
+            h_open.append(dailybar.open)
+        if len(h_close) < 4 or len(h_open) < 4:
+            return False
+    
+        # 一阳三阴
+        if h_close[3] > h_open[3] \
+                and (h_close[0] < h_open[0] and h_close[1] < h_open[1] and h_close[2] < h_open[2]):
+            # and (h_close[-1] < h_close[-2] and h_close[-2] < h_close[-3]) \
+            # and h_close[-1] / h_close[-4] - 1 < -0.045:
+            return True
+        return False
+    
+    
+    def stop_loss_by_index_l(self,now_date):
+        '''
+                        二八止损
+        minute
+        '''
+        if self.g.param['is_market_stop_loss_by_28_index'][self.g.VALUE]:
+            count = 120
+            # 回看指数前20天的涨幅
+            gr_index_l = self.get_growth_rate(self.g.param['index_l'][self.g.VALUE],20,now_date)
+            gr_index_s = self.get_growth_rate(self.g.param['index_s'][self.g.VALUE],20,now_date)
+            if gr_index_l <= self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
+                log.info("=>开始执行二八指数止损")
+                if (self.g.cache['minute_count_index_ls_drop'] == 0):
+                    log.info("当前二八指数的20日涨幅同时低于[%.2f%%], %s指数: [%.2f%%], %s指数: [%.2f%%]"
+                             % (self.g.param['index_growth_rate'][self.g.VALUE] * 100, self.g.param['index_l'][self.g.VALUE], gr_index_l * 100, self.g.param['index_s'][self.g.VALUE], gr_index_s * 100))
+                self.g.cache['minute_count_index_ls_drop'] += 1
+            else:
+                # 不连续状态归零
+                if self.g.cache['minute_count_index_ls_drop'] < count:
+                    self.g.cache['minute_count_index_ls_drop'] = 0
+        
+            if self.g.cache['minute_count_index_ls_drop'] >= count:
+                if self.g.cache['minute_count_index_ls_drop'] == count:
+                    log.info("==> 当日%s指数和%s指数的20日增幅低于[%.2f%%]已超过%d分钟，执行28指数止损"
+                             % (self.g.param['index_l'][self.g.VALUE], self.g.param['index_s'][self.g.VALUE], self.g.param['index_growth_rate'][self.g.VALUE] * 100, count))
+                self.position_clear()
+                self.g.cache['day_count'] = 0
+                self.g.cache['stop_trade'] = True  # 暂停当天交易
+                return True
+            return False
+        return False
+    
+    
+    def stop_loss_by_stock(self,now_date):
+        '''
+                        个股止损
+        minute 级别
+        '''
+        if self.g.param['is_stock_stop_loss'][self.g.VALUE]:
+            log.info("=>开始进行个股止损")
+            for position in self.strategy.get_positions():
+                symbol=position.exchange+'.'+position.sec_id 
+                cur_price = self.strategy.get_last_n_bars(symbol,60,1,self.pre_minute(now_date, -1))[0].close
+                if self.g.cache['last_high'][symbol] < cur_price:
+                    self.g.cache['last_high'][symbol] = cur_price
+                threshold = self._get_stop_loss_threshold(symbol, self.g.param['period'][self.g.VALUE],now_date)
+                # log.debug("个股止损阈值, stock: %s, threshold: %f" %(stock, threshold))
+                if cur_price < self.g.cache['last_high'][symbol] * (1 - threshold):
+                    log.info("==> 个股止损, stock: %s, cur_price: %f, last_high: %f, threshold: %f"
+                             % (symbol, cur_price, self.g.cache['last_high'][symbol], threshold))
+                    if self.position_close(position):
+                        self.g.cache['day_count'] = 0
+    
+    
+    def stop_profit_by_stock(self,now_date):
+        '''
+                        个股止盈
+        minute 级别
+        '''
+        if self.g.param['is_stock_stop_profit'][self.g.VALUE]:
+            log.info("=>开始进行个股止盈")
+            for position in self.strategy.get_positions():
+                symbol=position.exchange+'.'+position.sec_id 
+                cur_price = self.strategy.get_last_n_bars(symbol,60,1,self.pre_minute(now_date, -1))[0].close
+                threshold = self._get_stop_profit_threshold(
+                    symbol, self.g.param['period'][self.g.VALUE],now_date)
+                # log.debug("个股止盈阈值, stock: %s, threshold: %f" %(stock, threshold))
+                if cur_price > position.avg_cost * (1 + threshold):
+                    log.info("==> 个股止盈, stock: %s, cur_price: %f, avg_cost: %f, threshold: %f"
+                             % (symbol, cur_price, self.g.cache['last_high'][symbol], threshold))
+                    if self.position_close(position):
+                        self.g.cache['day_count'] = 0
+    
+    
+    def _get_stop_loss_threshold(self,security, n,now_date):
+        '''
+                        计算个股回撤止损阈值
+                        即个股在持仓n天内能承受的最大跌幅
+                        算法：(个股250天内最大的n日跌幅 + 个股250天内平均的n日跌幅)/2
+                        返回正值
+        '''
+        pct_change = self._get_pct_change(security, 250, n,now_date)
+        # log.debug("pct of security [%s]: %s", pct)
+        maxd = pct_change.min()
+        # maxd = pct[pct<0].min()
+        avgd = pct_change.mean()
+        # avgd = pct[pct<0].mean()
+        # maxd和avgd可能为正，表示这段时间内一直在增长，比如新股
+        bstd = (maxd + avgd) / 2
+    
+        # 数据不足时，计算的bstd为nan
+        if not math.isnan(bstd):
+            if bstd != 0:
+                return abs(bstd)
+            else:
+                # bstd = 0，则 maxd <= 0
+                if maxd < 0:
+                    # 此时取最大跌幅
+                    return abs(maxd)
+    
+        return 0.099  # 默认配置回测止损阈值最大跌幅为-9.9%，阈值高貌似回撤降低
+    
+    
+    def _get_stop_profit_threshold(self,security, n=3):
+        '''
+        计算个股止盈阈值
+        算法：个股250天内最大的n日涨幅
+        返回正值
+        '''
+        pct_change = self._get_pct_change(security, 250, n)
+        maxr = pct_change.max()
+    
+        # 数据不足时，计算的maxr为nan
+        # 理论上maxr可能为负
+        if (not math.isnan(maxr)) and maxr != 0:
+            return abs(maxr)
+        return 0.30  # 默认配置止盈阈值最大涨幅为30%
+    
+    
+    def _get_pct_change(self,symbol, n, m,now_date):
+        '''
+                        获取个股前n天的m日增幅值序列
+                        增加缓存避免当日多次获取数据
+        '''
+        pct_change = None
+        if symbol in self.g.cache['pct_change'].keys():
+            pct_change = self.g.cache['pct_change'][symbol]
+        else:
+            dailybars=self.strategy.get_last_n_dailybars(symbol,n,self.pre_days(now_date, -1))
+            #dailybars=self.reversed_list(dailybars, n)
+            close_price=[]
+            keys=[]
+            for dailybar in dailybars:
+                keys.append(dailybar.strtime)
+                close_price.append(dailybar.close)
+            df = pd.DataFrame(close_price, index=keys)
+            df.columns = ['close']
+            pct_change = df['close'].pct_change(m)  # 3日的百分比变比（即3日涨跌幅）
+            self.g.cache['pct_change'][symbol] = pct_change
+        return pct_change
+    
+    
+    #### trade ####
+    
+    
+    def position_open(self,stock, amout,now_date):
+        '''
+                        开仓，买入指定价值的证券
+                        报单成功并成交（包括全部成交或部分成交，此时成交量大于0），返回True
+                        报单失败或者报单成功但被取消（此时成交量等于0），返回False
+        '''
+        log.info("==>买入股票%s"%stock)
+        tick=self.strategy.get_last_n_bars(stock,60,1,self.pre_minute(now_date, -1))
+        #tick=self.strategy.get_last_n_ticks(stock,1,now_date)
+        cur_price =tick[0].close
+        value=int(amout/cur_price);
+        value=int(value/100)
+        value=int(value*100)
+        openId=stock.split(".")
+        order=self.strategy.open_long_sync(openId[0],openId[1],0,value)
+        #order = self._order_target_value(security, value)
+        #if order != None and order.filled > 0:
+        # 报单成功并有成交则初始化最高价
+        # cur_price = order.price
+        self.g.cache['last_high'][stock] = cur_price
+        return True
+        #return False
+    
+    
+    def position_close(self,position):
+        '''
+                        平仓，卖出指定持仓
+                        平仓成功并全部成交，返回True
+                        报单失败或者报单成功但被取消（此时成交量等于0），或者报单非全部成交，返回False
+        '''
+        # order = _order_target_value(security, 0)  # 可能会因停牌失败
+        log.info("==>卖出股票%s"%position.sec_id)
+        order=self.strategy.close_long_sync(position.exchange,position.sec_id,0,position.volume)  # 卖出可用仓位
+        #if order.status> 0:
+            # 只要有成交，无论全部成交还是部分成交，则统计盈亏
+            #self.g.trade_stat.watch(security, order.filled,
+            #                  position.avg_cost, position.price)
+>>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
 
 
 #来自最大回撤抄底发

@@ -6,7 +6,7 @@ import talib
 
 def initialize(context):
     # 策略参考标准
-    set_benchmark('000001.XSHG')
+    set_benchmark('000300.XSHG')
     g.origin='399001.XSHE'
     # 设置手续费，买入时万分之三，卖出时万分之三, 每笔交易最低扣5块钱
     set_commission(PerTrade(buy_cost=0.0003, sell_cost=0.0003, min_cost=5))
