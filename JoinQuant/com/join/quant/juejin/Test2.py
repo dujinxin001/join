@@ -27,7 +27,7 @@ class Mystrategy(StrategyBase):
         startDate=strBarDate- datetime.timedelta(days=20)
         startDate=startDate.strftime('%Y-%m-%d')
         endDate=strBarDate.strftime('%Y-%m-%d')
-        #list=self.get_market_index('SHSE.600000,SHSE.600010,SHSE.600399', startDate, endDate)
+        list=self.get_market_index('SHSE.600000,SHSE.600010,SHSE.600399', startDate, endDate)
         #[print(m) for m in list] 
         #self.xiaoshizhi.handle_data(bar,startDate,endDate)
     def on_execrpt(self, res):
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     startDate=strBarDate.strftime('%Y-%m-%d')
     endDate=strBarDate.strftime('%Y-%m-%d')
     listaa=myStrategy.get_market_index('SHSE.600000,SHSE.600010,SHSE.600399', startDate, startDate)
-    list2=myStrategy.get_financial_index('SHSE.600000,SHSE.600010,SHSE.600399', '2016-06-08 9:31:00', '2016-07-31 9:31:00')
+    list2=myStrategy.get_financial_index('SHSE.600000,SHSE.600010,SHSE.600399', '2016-06-08', '2016-07-31')
     list_bar=myStrategy.get_bars('SHSE.600791',60,'2016-11-17 14:47:00', '2016-11-17 14:49:00')
     for a in list_bar:
         log.info(list_bar[0].close)

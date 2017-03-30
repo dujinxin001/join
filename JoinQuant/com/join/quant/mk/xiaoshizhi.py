@@ -2,6 +2,7 @@ from collections import OrderedDict
 from blacklist import *
 import math
 import tradestat
+import datetime
 import talib as tl
 import numpy as np
 import pandas as pd
@@ -10,7 +11,6 @@ import copy
 
 def init(context):
     log_section('initialize', '初始化', sep=False)
-
     # 设置系统参数
     set_sys(context)
     # 设置常数
@@ -18,9 +18,9 @@ def init(context):
     # 设置策略参数
     set_param(context)
     # 设置过滤器
-    set_filter(context)
+    #set_filter(context)
     # 设置止损器
-    set_stop_loss(context)
+    #set_stop_loss(context)
     # 设置缓存参数
     set_cache(context)
     # 加载统计模块
@@ -31,12 +31,12 @@ def init(context):
     # 打印策略参数
     log_param(context)
     # 打印使用的过滤器
-    log_filter(context)
+    #log_filter(context)
     # 打印使用的止损器
-    log_stop_loss(context)
+    #log_stop_loss(context)
     
     #收盘后执行函数
-    scheduler.run_daily(after_trading_end, time_rule=market_close(hour=0, minute=0))
+    #scheduler.run_daily(after_trading_end, time_rule=market_close(hour=0, minute=0))
     #
     #scheduler.run_daily(position_adjust, time_rule=market_open(hour=0, minute=231))
 
@@ -50,7 +50,7 @@ def after_code_changed(context):
 
 
 def before_trading(context):
-    log_section('before_trading_start', '盘前处理:又开始赚钱了')
+    log_section('before_trading', '盘前处理:又开始赚钱了')
 
     reset_day_param(context)
     # 盘前就判断三黑鸦状态，因为判断的数据为前4日
@@ -60,8 +60,8 @@ def before_trading(context):
         logger.info("==> 前4日已经构成三黑鸦形态")
 
 
-def after_trading_end(context,bar_dict):
-    log_section('after_trading_end', '盘后处理：大赚收钱')
+def after_trading(context):
+    log_section('after_trading', '盘后处理：大赚收钱')
     # 得到当前未完成订单
     orders = get_open_orders()
     for order_id in orders:
@@ -70,7 +70,7 @@ def after_trading_end(context,bar_dict):
         order=get_order(order_id)
         if order.status==ORDER_STATUS.FILLED:
             context.trade_stat.watch(order.order_book_id, order.filled_quantity,
-                           order.avg_price, bar_dict[order.order_book_id].close)
+                           order.avg_price,  history_bars(order.order_book_id,1, '1m', 'close'))
     context.trade_stat.report(context)
 
 def handle_bar(context, bar_dict):
@@ -82,10 +82,18 @@ def handle_bar(context, bar_dict):
     hour = context.now.hour
     minute = context.now.minute
     #进行所有止损器判断，执行止损
-    for stop in context.stop_loss_minute:
-        if hour==9 and minute==31:
-            logger.info("执行止损检查")
-        stop[context.FUNC](context, bar_dict)
+    if hour==9 and minute==31:
+        logger.info("执行止损检查")
+    #大盘价格止损
+    stop_loss_by_price(context,bar_dict)
+    #三黑鸦止损
+    stop_loss_by_3_crows(context,bar_dict)
+    #二八止损
+    stop_loss_by_index_l(context,bar_dict)
+    #个股止损
+    stop_loss_by_stock(context,bar_dict)
+    #个股止盈
+    stop_profit_by_stock(context,bar_dict)
 
     # 每天指定时间检查是否调仓并处理
     adjust_position_time = context.param['adjust_position_time'][context.VALUE]
@@ -117,6 +125,9 @@ def _adjust_position(context, bar_dict):
     else:
         if context.cache['day_count'] % context.param['period'][context.VALUE] == 0:
             logger.info("==> 满足条件进行调仓")
+            if gr_index_l > context.param['index_growth_rate'][context.VALUE] and gr_index_s <= context.param['index_growth_rate'][context.VALUE]:
+                stock_list = context.cache['stock_list']
+                context.cache['stock_list']=filter_by_growth_rate(stock_list, context, bar_dict)
             buy_stocks = pick_stocks(context, bar_dict)
             context.cache['buy_stocks']=list(buy_stocks)
             if len(context.cache['buy_stocks'])==0:
@@ -124,7 +135,6 @@ def _adjust_position(context, bar_dict):
                 context.cache['day_count']=0
                 return
             logger.info("选股后可买股票: %s" % (context.cache['buy_stocks']))
-            
             position_adjust2(context,bar_dict)
         context.cache['day_count'] += 1
 
@@ -142,13 +152,13 @@ def _adjust_position(context, bar_dict):
 # 设置系统参数
 def set_sys(context):
     # 设定沪深300指数作为基准
-    context.benchmark ='000300.XSHG'
+    #context.benchmark ='000300.XSHG'
     # 股票类每笔交易时的手续费是：买入时佣金万分之三，卖出时佣金万分之三加千分之一印花税, 每笔交易佣金最低扣5块钱
-    context.commission = 0.03
+    # context.commission = 0.03
     # 设定滑点为百分比
-    context.slippage=0.4
-    # 使用真实价格回测,回测请注释
-    #set_option('use_real_price', True)
+    #context.slippage=0.4
+    pass
+
 
 # 设置常数
 def set_const(context):
@@ -162,10 +172,10 @@ def set_const(context):
 def set_param(context):
     p = {}
 
-    p['period'] = (3, '调仓频率，单位：日')
+    p['period'] = (4, '调仓频率，单位：日')
     p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
     p['pick_by_pe'] = (False, '是否根据PE选股')
-    p['pick_by_eps'] = (False, '是否根据EPS选股')
+    p['pick_by_eps'] = (True, '是否根据EPS选股')
     p['pick_stock_count'] = (100, '备选股票数目')
     p['filter_gem'] = (True, '是否过滤创业板股票')
     p['filter_blacklist'] = (True, '是否过滤黑名单股票，回测建议关闭，模拟运行时开启')
@@ -173,11 +183,11 @@ def set_param(context):
     p['is_rank_stock'] = (True, '是否对股票评分')
     p['rank_stock_count'] = (20, '参与评分的股票数目')  # 评分的股票数目不能大于备选股票数目
     p['index_l'] = ('000016.XSHG', '大盘股指数')  # 上证50指数
-    p['index_s']=('000905.XSHG','小盘股指数') # 中证500指数
+    p['index_s']=('399101.XSHE','小盘股指数') # 中证500指数
     p['buy_stock_count'] = (2, '买入股票数目')
     p['index_growth_rate'] = (0.005, '判定调仓的二八指数n日增幅')  # n = 20
     p['index_3_crows'] = ('000300.XSHG', '判定三黑鸦的指数')
-    p['index_price'] = ('000300.XSHG', '判定价格止损的指数')
+    p['index_price'] = ('399101.XSHE', '判定价格止损的指数')
     p['is_stock_stop_loss']=(False,'是否个股止损')
     p['is_stock_stop_profit']=(False,'是否个股止盈')
     p['is_market_stop_loss_by_price'] = (True,'是否根据大盘历史价格止损')
@@ -188,9 +198,8 @@ def set_param(context):
 
 # 设置过滤器
 def set_filter(context):
-    # g.filter={}
     context.filter = []
-    #func_register(g.filter, filter_market_time, '指数MACD过滤')
+    #func_register(context.filter, filter_market_time, '指数MACD过滤')
     func_register(context.filter, filter_by_query, '查询财务数据库过滤')
     func_register(context.filter, filter_gem, '过滤创业版股票')
     func_register(context.filter, filter_paused, '过滤停牌股票')
@@ -268,41 +277,63 @@ def reset_day_param(context):
     context.cache['buying_stocks']=[] #清空已经下买单股票
     context.cache['sell_failed_stocks']=[] #清空卖出失败的股票
     
-    
-
-
 #### pick & filter ####
-
-
 def pick_stocks(context, data):
     '''
     选取指定数目的小市值股票，再进行过滤，最终挑选指定可买数目的股票
     '''
     stock_list = context.cache['stock_list']
-
-    # for key in g.filter.keys():
-    #     stock_list = g.filter[key][g.FUNC](stock_list, context, data)
-    for filter in context.filter:
-        stock_list = filter[context.FUNC](stock_list, context, data)
-        if len(stock_list)==0:
-           logger.info("股票被过滤没了")
-           return stock_list
-
+    #查询财务数据库过滤
+    stock_list=filter_by_query(stock_list, context, data)
+    #过滤创业版股票
+    stock_list=filter_gem(stock_list, context, data)
+    #过滤停牌股票
+    stock_list=filter_paused(stock_list, context, data)
+    #过滤ST及其他具有退市标签的股票
+    stock_list=filter_st(stock_list, context, data)
+    #过滤涨停的股票
+    stock_list=filter_limitup(stock_list, context, data)
+    #过滤跌停的股票
+    stock_list=filter_limitdown(stock_list, context, data)
+    #过滤黑名单股票
+    stock_list=filter_blacklist(stock_list, context, data)
+    #过滤新股
+    stock_list=filter_new(stock_list, context, data)
+    #评分过滤器
+    stock_list=filter_by_rank(stock_list, context, data)
+    if len(stock_list)==0:
+        logger.info("股票被过滤没了")
+        return stock_list
+    
+    #选取上海和深圳股票各一只       
+    buy_list=[]
+    has_sh=False
+    has_sz=False
+    for stock in stock_list:
+        if stock[0:2] == '60'and not has_sh:
+            buy_list.append(stock)
+            has_sh=True
+        if stock[0:2] == '00' and  not has_sz:
+            buy_list.append(stock)
+            has_sz=True
+        if len(buy_list)==context.param['buy_stock_count'][context.VALUE]:
+            break
+    return buy_list
     # 选取指定可买数目的股票
-    return stock_list[:context.param['buy_stock_count'][context.VALUE]]
+    #return stock_list[:context.param['buy_stock_count'][context.VALUE]]
 
 
 def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
     '''
-    logger.info("=>开始执行财务条件过滤%s"%(len(stock_list)))
+    logger.info("=>开始执行财务条件过滤")
     pe_min = 0
     pe_max = 200
     eps_min = 0
 
-    stock_list=['300029.XSHE']
-    q = query(fundamentals.eod_derivative_indicator.market_cap,fundamentals.financial_indicator.earnings_per_share).filter(fundamentals.stockcode.in_(stock_list))
+    #stock_list=['300029.XSHE']
+    q = query(fundamentals.eod_derivative_indicator.market_cap).filter(fundamentals.stockcode.in_(stock_list))
     if context.param['pick_by_pe'][context.VALUE]:
         q = q.filter(
             fundamentals.eod_derivative_indicator.pe_ratio > pe_min,
@@ -316,10 +347,7 @@ def filter_by_query(stock_list, context, data):
                    ).limit(
             context.param['pick_stock_count'][context.VALUE]
         ))
-    list1=list(df.columns.values)
-    logger.info("=>结束执行财务条件过滤%s"%df)
-    for s in list1:
-        logger.info("=>结束执行财务条件过滤：%s,%s"%(instruments(s).symbol,df[s]))
+    logger.info("=>结束执行财务条件过滤")
     return list(df.columns.values)
 
 
@@ -359,7 +387,6 @@ def filter_paused(stock_list, context, data):
     过滤停牌股票
     '''
     logger.info("=>开始执行过滤停牌的股票")
-    #current_data = get_current_data()
     return [stock for stock in stock_list if not data[stock].suspended]
 
 
@@ -368,7 +395,6 @@ def filter_st(stock_list, context, data):
     过滤ST及其他具有退市标签的股票
     '''
     logger.info("=>开始执行过滤ST及其他具有退市标签的股票")
-    #current_data = get_current_data()
     return [stock for stock in stock_list
             if not is_st_stock(stock,1)
             and not data[stock].symbol.startswith('退') and not data[stock].symbol.startswith('*')]
@@ -391,9 +417,6 @@ def filter_limitup(stock_list, context, data):
     logger.info("=>开始执行过滤涨停的股票")
     threshold = 1.00
     stock_list2=[]
-    # last_prices = history(1, unit='1m', field='close',
-    #                       security_list=stock_list)
-
     # 已存在于持仓的股票即使涨停也不过滤，避免此股票再次可买，但因被过滤而导致选择别的股票
     # return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
     #         or last_prices[stock][-1] < data[stock].high_limit * threshold]
@@ -410,10 +433,8 @@ def filter_limitdown(stock_list, context, data):
     '''
     过滤跌停的股票
     '''
-    logger.info("=>开始执行过滤跌停的股票%s"%stock_list)
+    logger.info("=>开始执行过滤跌停的股票")
     threshold = 1.00
-    # last_prices = history(1, unit='1m', field='close',
-    #                       security_list=stock_list)
 
     # return [stock for stock in stock_list if stock in context.portfolio.positions.keys()
     #         or last_prices[stock][-1] > data[stock].low_limit * threshold]
@@ -425,7 +446,8 @@ def filter_by_growth_rate(stock_list, context, data):
     '''
     过滤n日增长率为负的股票
     '''
-    n = 20
+    logger.info("=>开始过滤n日增长率为负的股票")
+    n = 25
     return [stock for stock in stock_list if get_growth_rate(stock, n) > 0]
 
 
@@ -434,7 +456,7 @@ def filter_blacklist(stock_list, context, data):
     过滤黑名单股票
     '''
     if context.param['filter_blacklist'][context.VALUE]:
-        logger.info("=>开始过滤黑名单的股票%s"%stock_list)
+        logger.info("=>开始过滤黑名单的股票")
         blacklist = get_blacklist()
         return [stock for stock in stock_list if stock not in blacklist]
     return stock_list
@@ -444,7 +466,7 @@ def filter_new(stock_list, context, data):
     过滤新股
     '''
     if context.param['is_filter_new'][context.VALUE]:
-        logger.info("=>开始过滤新股%s"%stock_list)
+        logger.info("=>开始过滤新股")
         delta = 60
         start_date = context.now.date() - datetime.timedelta(delta)
         return [stock for stock in stock_list if instruments(stock).listed_date < start_date]
@@ -494,7 +516,6 @@ def filter_by_rank(stock_list, context, data):
                 low_price_130 = min(h_low)
                 high_price_130 = max(h_high)
         
-                #avg_15 = data[stock].mavg(15, frequency='minute')
                 avg_15 = h_close[-15:].mean()
                 cur_price = data[stock].close
         
@@ -524,7 +545,7 @@ def filter_by_chaodie(stock_list, context, data):
     logger.info("=>开始超跌过滤%s" %stock_list)
     fall_price=[]
     for stock in stock_list:
-        close_prices=history(70, '1d', 'close')[stock]
+        close_prices=history_bars(stock,70, '1d', 'close')[stock]
         fall_price.append((stock,close_prices.max()/close_prices[-1]-1))
     
     fall_price=sorted(fall_price,key=lambda item:item[1],reverse=True)
@@ -552,7 +573,7 @@ def filter_market_time(stock_list, context, data):
     #先计算周线
     logger.info("==> 判断MACD止损")
     index = context.param['index_price'][context.VALUE]
-    hData = history(130, '1200m', 'close')[index]
+    hData = history_bars(index,130, '1200m', 'close')
     close = hData['close']
     close = np.array(close, dtype='f8')
     
@@ -561,7 +582,7 @@ def filter_market_time(stock_list, context, data):
     if wMacd[-1] <= 0:
         stock_list=[]
     else:
-        hData = history(130, '240m', 'close')[index]
+        hData = history_bars(index,130, '240m', 'close')
         close = hData['close']
         close = np.array(close, dtype='f8')
         dDif, dDea, dMacd =  MACD_CN(close, 12, 26, 9)
@@ -581,9 +602,9 @@ def stop_loss_by_price(context, data):
     if context.param['is_market_stop_loss_by_price'][context.VALUE]:
         index = context.param['index_price'][context.VALUE]
         if not context.cache['is_day_stop_loss_by_price']:
-            h_close = history(160, '1d', 'close')[index]
-            h_low = history(160, '1d', 'low')[index]
-            h_high = history(160, '1d','high')[index]
+            h_close = history_bars(index,160, '1d', 'close')
+            h_low = history_bars(index,160, '1d', 'low')
+            h_high = history_bars(index,160, '1d','high')
             #low_price = h_low.low.min()
             #high_price = h_high.high.max()
             low_price = min(h_low)
@@ -651,8 +672,8 @@ def _is_3_crows(stock):
     # 根据前4日数据判断
     # 3根阴线跌幅超过4.5%（此条件忽略）
     logger.info("=>盘前判断三黑鸭状态")
-    h_close=history(4,'1d','close')[stock]
-    h_open=history(4,'1d','open')[stock]
+    h_close=history_bars(stock,4,'1d','close')
+    h_open=history_bars(stock,4,'1d','open')
     #h_close = list(h['close'])
     #h_open = list(h['open'])
 
@@ -810,7 +831,7 @@ def _get_pct_change(context,security, n, m):
     if security in context.cache['pct_change'].keys():
         pct_change =context.cache['pct_change'][security]
     else:
-        h = history(n,'1d','close')[security]
+        h = history_bars(security,n,'1d','close')
         pct_change = h.pct_change(m)  # 3日的百分比变比（即3日涨跌幅）
         context.cache['pct_change'][security] = pct_change
     return pct_change
@@ -826,14 +847,12 @@ def position_open(context,stock, value,bar_dict):
     报单失败或者报单成功但被取消（此时成交量等于0），返回False
     '''
     order = _order_target_value(stock, value,bar_dict)
-    #if order != None and order.filled_quantity > 0:
-    logger.info("buyorder=%s"%order)
-    if order.status==ORDER_STATUS.PENDING_NEW:
+    logger.info("%s股票提交买单：%s"%(stock,order))
+    if order.status==ORDER_STATUS.FILLED:
         # 报单成功并有成交则初始化最高价
         context.cache['buying_stocks'].append(stock)
-        logger.info("订单成交，均价=%s"%order.avg_price)
+        logger.info("%s股票买入成功,全部成交,均价=%s"%(stock,order.avg_price))
         cur_price = get_close_price(stock, 1, '1m')
-        # cur_price = order.price
         context.cache['last_high'][stock] = cur_price
         return True
     return False
@@ -845,16 +864,11 @@ def position_close(context,stock,position,bar_dict):
     平仓成功并全部成交，返回True
     报单失败或者报单成功但被取消（此时成交量等于0），或者报单非全部成交，返回False
     '''
-    # order = _order_target_value(security, 0)  # 可能会因停牌失败
     order = _order(stock, -position.sellable,bar_dict )  # 卖出可用仓位
-    #logger.info("orderId=%s"% orderId)
-    #order=get_order(orderId)
-    logger.info("sellorder=%s"% order)
-    #if order.filled_quantity > 0:
-    if order.status==ORDER_STATUS.PENDING_NEW:
+    logger.info("%s股票提交卖单=%s"%(stock,order))
+    if order.status==ORDER_STATUS.FILLED:
         # 只要有成交，无论全部成交还是部分成交，则统计盈亏
-        context.cache['selling_stocks'].append(stock)
-        logger.info("下单成功，均价=%s"%order.avg_price)
+        logger.info("%s卖出成功,全部成交,均价=%s"%(stock,order.avg_price))
         # 全部成交则删除相关证券的最高价缓存
         logger.info("全部成交则删除相关证券的最高价缓存")
         if stock in context.cache['last_high']:
@@ -862,8 +876,7 @@ def position_close(context,stock,position,bar_dict):
         else:
             logger.warn("last high price of %s not found" % (stock))
         return True
-    #if order.status == ORDER_STATUS.REJECTED:
-        
+    context.cache['selling_stocks'].append(stock)
     return False
 
 
@@ -886,39 +899,41 @@ def position_clear(context,bar_dict):
 def position_adjust2(context ,bar_dict):
     positions_keys=context.portfolio.positions.keys()
     buy_stocks=copy.deepcopy(context.cache['buy_stocks'])
-    logger.info("过滤前positions_keys=%s" % positions_keys)
-    logger.info("过滤前buy_stocks=%s" % buy_stocks)
+    logger.info("当前持仓股票：%s" % positions_keys)
+    logger.info("当前待买股票：%s" % buy_stocks)
     res_list = list(set(positions_keys)&set(buy_stocks))
-    logger.info("剩余资金=%s" % context.portfolio.cash)
+    logger.info("持仓股票与待买股票相同的股票为：%s" % buy_stocks)
+    logger.info("当前剩余资金=%s" % context.portfolio.cash)
     if len(res_list):
         for res in res_list:
             positions_keys.remove(res)
             buy_stocks.remove(res)
-    logger.info("过滤完positions_keys=%s" % positions_keys)
-    logger.info("过滤完buy_stocks=%s" % buy_stocks)    
+    logger.info("过滤后当前持仓股票=%s" % positions_keys)
+    logger.info("过滤后当前待买股票=%s" % buy_stocks)    
     for stock in positions_keys:
         position = context.portfolio.positions[stock]
-        logger.info("%s当前position=%s" %(stock,position))
-        logger.info("%s当前持仓数目=%s" %(stock,position.quantity))
-        logger.info("%s当前可卖数目=%s" %(stock,position.sellable))
+        logger.info("%s股票当前仓位信息：%s" %(stock,position))
+        logger.info("%s股票当前持仓数目：%s" %(stock,position.quantity))
+        logger.info("%s股票当前可卖数目：%s" %(stock,position.sellable))
         if stock not in context.cache['selling_stocks'] and position.sellable>0:
             if bar_dict[stock].suspended:
                 continue;
             is_sell=position_close(context,stock,position,bar_dict)
             if not is_sell:
-                logger.info("%s卖出失败" %(stock))
+                logger.info("卖出股票%s未全部成交" %(stock))
                 #context.cache['selling_stocks'].remove(stock)
         elif position.quantity==0 and stock in context.cache['selling_stocks']:
+                logger.info("%s股票当前持仓数量已经为0，从selling_stocks删除" %(stock))
                 context.cache['selling_stocks'].remove(stock)
                 
                 
-    if not len(context.cache['selling_stocks']):
+    if len(buy_stocks)>0 and len(context.cache['selling_stocks'])==0:
+        value = context.portfolio.cash /len(buy_stocks);
         for stock in buy_stocks:
             if stock not in context.cache['buying_stocks']:
-                logger.info("开始买入股票=%s"%stock)
-                value = context.portfolio.cash /len(buy_stocks);
+                logger.info("开始买入股票：%s"%stock)
                 if position_open(context,stock, value,bar_dict):
-                    logger.info("下单买入成功%s"%stock)
+                    logger.info("买入%s股票全部成交" %(stock))
        
         
 
@@ -952,11 +967,11 @@ def position_adjust(context ,bar_dict):
                     
     #if position_count<buy_count:
     if len(context.cache['selling_stocks'])==0:
+        value = context.portfolio.cash / (buy_count - position_count)
         for stock in context.cache['buy_stocks']:
             if stock not in positions_keys:
                 if stock not in context.cache['buying_stocks']:
                     logger.info("开始买入股票=%s"%stock)
-                    value = context.portfolio.cash / (buy_count - position_count)
                     if position_open(context,stock, value,bar_dict):
                         logger.info("下单买入成功%s"%stock)
     
@@ -1022,7 +1037,7 @@ def get_close_price(security, n, unit='1d'):
     '''
     close = 0
     while(n > 0):  # 如果前n日数据为nan，则取n-1日数据，直至n为1
-        close = history(n, unit, 'close')[security][0]
+        close = history_bars(security,n, unit, 'close')[0]
         if math.isnan(close):
             n -= 1
         else:
@@ -1067,7 +1082,7 @@ def log_stop_loss(context):
 #结合缩量，选择买入时机  
 #返回值n表示买入系数n,n越大可买入越多。
 def buy_macd(index2):
-    close = history(60, '1d','close')[index2]
+    close = history_bars(index2,60, '1d','close')[index2]
     close = np.array(close, dtype='f8')
     wDif, wDea, wMacd =  MACD_CN(close, 12, 26, 9)
     if wMacd[-1] > 0 and  wMacd[-2]<=0 :

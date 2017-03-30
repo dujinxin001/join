@@ -91,23 +91,26 @@ class xiaoshizhi():
         if hour == adjust_position_time[self.g.HOUR] and minute == adjust_position_time[self.g.MINUTE] and not self.g.cache['stop_trade']:
             log.info("adjust_position_time[self.g.HOUR]=%s"%hour)
             log.info("adjust_position_time[self.g.MINUTE]=%s"% minute)
-            self._adjust_position(dt)
+            self._adjust_position()
         if hour == 15:
             self.after_trading_end()
     
-    def _adjust_position(self,dt):
+    def _adjust_position(self):
         log.info("调仓日计数 [%d]" % (self.g.cache['day_count']))
     
         # 回看指数前20天的涨幅
-        gr_index_l = self.get_growth_rate(self.g.param['index_l'][self.g.VALUE],20,dt)
-        gr_index_s = self.get_growth_rate(self.g.param['index_s'][self.g.VALUE],20,dt)
+        gr_index_l = self.get_growth_rate(self.g.param['index_l'][self.g.VALUE],20)
+        gr_index_s = self.get_growth_rate(self.g.param['index_s'][self.g.VALUE],20)
         log.info("当前%s指数的20日涨幅 [%.2f%%]" % (self.g.param['index_l'][self.g.VALUE], gr_index_l * 100))
         log.info("当前%s指数的20日涨幅 [%.2f%%]" % (self.g.param['index_s'][self.g.VALUE], gr_index_s * 100))
-        #if gr_index_l <= self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
-        if 1==2:
+        if gr_index_l <= self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
+        #if 1==2:
             self.position_clear()
             self.g.cache['day_count'] = 0
         else:
+            if gr_index_l > self.g.param['index_growth_rate'][self.g.VALUE] and gr_index_s <= self.g.param['index_growth_rate'][self.g.VALUE]:
+                stock_list = self.g.cache['stock_list']
+                self.g.cache['stock_list']=self.filter_by_growth_rate(stock_list)
             if self.g.cache['day_count'] % self.g.param['period'][self.g.VALUE] == 0:
                 log.info("==> 满足条件进行调仓")
                 buy_stocks = self.pick_stocks()
@@ -159,7 +162,7 @@ class xiaoshizhi():
         p = {}
     
         p['period'] = (3, '调仓频率，单位：日')
-        p['adjust_position_time'] = ((9, 40), '配置调仓时间（24小时分钟制）')
+        p['adjust_position_time'] = ((14, 49), '配置调仓时间（24小时分钟制）')
         p['pick_by_pe'] = (False, '是否根据PE选股')
         p['pick_by_eps'] = (True, '是否根据EPS选股')
         p['pick_stock_count'] = (100, '备选股票数目')
@@ -169,11 +172,11 @@ class xiaoshizhi():
         p['is_rank_stock'] = (True, '是否对股票评分')
         p['rank_stock_count'] = (20, '参与评分的股票数目')  # 评分的股票数目不能大于备选股票数目
         p['index_l'] = ('SHSE.000016', '大盘股指数')  # 上证50指数
-        p['index_s'] = ('SHSE.000905', '小盘股指数')  # 中证500指数
+        p['index_s'] = ('SZSE.399678', '小盘股指数')  # 中证500指数
         p['buy_stock_count'] = (2, '买入股票数目')
         p['index_growth_rate'] = (0.005, '判定调仓的二八指数n日增幅')  # n = 20
         p['index_3_crows'] = ('SHSE.000300', '判定三黑鸦的指数')
-        p['index_price'] = ('SHSE.000300', '判定价格止损的指数')
+        p['index_price'] = ('SZSE.399678', '判定价格止损的指数')
         p['is_stock_stop_loss'] = (False, '是否个股止损')
         p['is_stock_stop_profit'] = (False, '是否个股止盈')
         p['is_market_stop_loss_by_price'] = (True, '是否根据大盘历史价格止损')
@@ -373,7 +376,8 @@ class xiaoshizhi():
         '''
                         过滤n日增长率为负的股票
         '''
-        n = 20
+        log.info("=> 过滤25日增长率为负的股票%s" % stock_list)
+        n = 25
         return [stock for stock in stock_list if self.get_growth_rate(stock, n) > 0]
     
     
@@ -821,14 +825,15 @@ class xiaoshizhi():
     #### utils ####
     
     
-    def get_growth_rate(self,security, n,dt):
+    def get_growth_rate(self,security, n):
         '''
                         获取股票n日以来涨幅，根据当前价计算
         '''
-        lc = self.get_close_price(security, n,'d',dt)
-        c = self.get_close_price(security, 1, 'm',dt)
+        lc = self.get_close_price(security, n,'d')
+        c = self.get_close_price(security, 1, 'm')
     
         if not math.isnan(lc) and not math.isnan(c) and lc != 0:
+            log.info("%s的20日涨幅 [%.2f%%]" % (security, ((c - lc) / lc) * 100))
             return (c - lc) / lc
         else:
             log.error("数据非法, security: %s, %d日收盘价: %f, 当前价: %f" % 
@@ -836,25 +841,23 @@ class xiaoshizhi():
             return 0
     
     
-    def get_close_price(self,security, n, unit,dt):
+    def get_close_price(self,security, n, unit):
         '''
                             获取前n个单位时间当时的收盘价
         '''
         close = 0
-        dtn=dt + datetime.timedelta(days=-n)
-        dt1=dt + datetime.timedelta(days=-1)
         while(n > 0):  # 如果前n日数据为nan，则取n-1日数据，直至n为1
-            #close = attribute_history(security, n, unit, ('close'))['close'][0]
+            bars=[]
             if unit=='d':
-                #bars=self.strategy.get_dailybars(security, dt1,dtn)
                 bars=self.strategy.get_last_n_dailybars(security, n)
-                for bar in bars:
-                    log.info('security的%s的值为%s'%(bar.strtime ,bar.close))
+                #for bar in bars:
+                #    log.info('security的%s的值为%s'%(bar.strtime ,bar.close))
             elif unit=='m':
-                #bars=self.strategy.get_bars(security,60, dt1,dtn)
                 bars=self.strategy.get_last_n_bars(security, 60,n)
-                for bar in bars:
-                    log.info('security的当前值为%s'%(bar.close))
+                #for bar in bars:
+                #    log.info('security的当前值为%s'%(bar.close))
+            if len(bars)==0:
+                continue
             close=bars[-1].close;  
             if math.isnan(close):
                 n -= 1
