@@ -6,10 +6,6 @@ import math
 import tradestat
 import talib as tl
 import shipane_sdk
-<<<<<<< HEAD
-=======
-
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
 
 def initialize(context):
     log_section('initialize', '初始化', sep=False)
@@ -41,29 +37,14 @@ def initialize(context):
 
 def process_initialize(context):
     log_section('process_initialize','进程重新启动')
-<<<<<<< HEAD
     log.info('实盘易初始化成功')
-=======
-    # 创建 JoinQuantExecutor 对象
-    # 可选参数包括：host, port, key, client, timeout 等
-    # 请将下面的 IP 替换为实际 IP
-    g.executor = shipane_sdk.JoinQuantExecutor(
-        host='106.15.37.132',
-        port=11788,
-        key='',
-        client=''
-    )
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
 
 
 def after_code_changed(context):
     log_section('after_code_changed','代码发生修改')
-<<<<<<< HEAD
     #set_filter()
     #set_cache()
     #g.cache['day_count']=9
-=======
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     
 
 
@@ -169,13 +150,9 @@ def _adjust_position(context, data):
         position_clear(context)
         g.cache['day_count'] = 0
     else:
-        if g.cache['day_count'] % g.param['period'][g.VALUE] == 0 and g.cache['day_count'] >= 0:
+        if g.cache['day_count'] % g.param['period'][g.VALUE] == 0 and g.cache['day_count'] >= 0::
             log.info("==> 满足条件进行调仓")
-<<<<<<< HEAD
             if gr_index_l > g.param['index_growth_rate'][g.VALUE] and gr_index_s <= g.param['index_growth_rate'][g.VALUE]:
-=======
-            if gr_index_l > g.param['index_growth_rate'][g.VALUE] and gr_index_s < g.param['index_growth_rate'][g.VALUE]:
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
                 stock_list = g.cache['stock_list']
                 g.cache['stock_list']=filter_by_growth_rate(stock_list, context, data)
             buy_stocks = pick_stocks(context, data)
@@ -262,7 +239,6 @@ def set_param():
 def set_filter():
     # g.filter={}
     g.filter = []
-<<<<<<< HEAD
     #func_register(g.filter, filter_by_MACD, 'MACD过滤')
     #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
     #func_register(g.filter, filter_by_20, '20日线过滤器')
@@ -270,22 +246,11 @@ def set_filter():
     #func_register(g.filter, filter_gem, '过滤创业版股票')
     #func_register(g.filter, filter_paused, '过滤停牌股票')
     #func_register(g.filter, filter_st, '过滤ST及其他具有退市标签的股票')
-=======
-    #func_register(g.filter, filter_market_time, '指数MACD过滤')
-    #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
-    #func_register(g.filter, filter_by_20, '20日线过滤器')
-    #func_register(g.filter, filter_old_stock, '过滤上市超过一年的')
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     func_register(g.filter, filter_by_query, '查询财务数据库过滤')
     func_register(g.filter, filter_limitup, '过滤涨停的股票')
     func_register(g.filter, filter_limitdown, '过滤跌停的股票')
-<<<<<<< HEAD
     #func_register(g.filter,filter_blacklist, '过滤黑名单股票')
     #func_register(g.filter,filter_new, '过滤新股')
-=======
-    func_register(g.filter,filter_blacklist, '过滤黑名单股票')
-    func_register(g.filter,filter_new, '过滤新股')
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     #func_register(g.filter,filter_by_growth_rate, '过滤n日增长率为负的股票')
     #func_register(g.filter, filter_by_20, '20日线过滤器')
     #func_register(g.filter,filter_by_chaodie, '超跌过滤器')
@@ -315,13 +280,8 @@ def set_cache():
     # 缓存股票持仓后的最高价
     c['last_high'] = {}
 
-<<<<<<< HEAD
     #df = get_fundamentals(query(valuation.code))
     #c['stock_list'] = list(df['code'])
-=======
-    df = get_fundamentals(query(valuation.code))
-    c['stock_list'] = list(df['code'])
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     #c['stock_list'] =get_index_stocks('000300.XSHG')
 
     # 缓存当日个股250天内最大的3日涨幅，避免当日反复获取，每日盘后清空
@@ -332,10 +292,7 @@ def set_cache():
     c['is_last_day_3_crows'] = False
     c['is_day_stop_loss_by_price'] = False
     c['stop_trade'] = False  # 暂停当天交易
-<<<<<<< HEAD
     c['buy_50']=False
-=======
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     g.cache = c
 
 
@@ -347,12 +304,8 @@ def reset_day_param(context):
     #开始选股
     df = get_fundamentals(query(valuation.code))
     g.cache['stock_list'] = list(df['code'])
-<<<<<<< HEAD
     #g.cache['stock_list']=get_concept_stocks(g.hangye, date=None)
     
-=======
-    #g.cache['stock_list']=get_index_stocks('000300.XSHG')
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     # 重置当日大盘价格止损状态
     g.cache['is_day_stop_loss_by_price'] = False
 
@@ -470,69 +423,6 @@ def fall_money_day_3line(security_list,n, n1=20, n2=60, n3=160):
     return s
 
 
-def cow_stock_value(stock_list, context, data):
-    log.info("=>开始执行脉冲过滤")
-    df = get_fundamentals(query(
-                                valuation.code, valuation.pb_ratio, valuation.circulating_market_cap
-                            ).filter(
-                                valuation.code.in_(stock_list),
-                                valuation.circulating_market_cap <= 100
-                            ))
-    log.info("=>开始执行脉冲过滤2")
-    df.index = df['code']
-    del df['code']
-    s_fall = fall_money_day_3line(df.index.tolist(), 120, 20, 60, 160)
-    log.info("=>开始执行脉冲过滤3")
-    s_cross = money_5_cross_60(df.index.tolist(), 120)
-    log.info("=>开始执行脉冲过滤4")
-    df = pd.concat([df, s_fall, s_cross], axis=1, join='inner')
-    log.info("=>开始执行脉冲过滤5")
-    df.columns = ['pb', 'cap', 'fall', 'cross']
-    df['score'] = df['fall'] * df['cross'] / (df['pb']*(df['cap']**0.5))
-    df.sort(['score'], ascending=True, inplace=True)
-    log.info("=>开始执行脉冲过滤6")
-    log.info("=>结束执行脉冲过滤%s" %df)
-    return df.index.tolist()
-
-
-def money_5_cross_60(security_list,n, n1=5, n2=60):
-    def money_5_cross_60_count(money, n, n1, n2):
-        i = 0
-        count = 0
-        while i < n :
-            money_MA60 = money[i+1:n2+i].mean()
-            money_MA60_before = money[i:n2-1+i].mean()
-            money_MA5 = money[i+1+n2-n1:n2+i].mean()
-            money_MA5_before = money[i+n2-n1:n2-1+i].mean()
-            if (money_MA60_before-money_MA5_before)*(money_MA60-money_MA5) < 0 : 
-                count=count+1
-            i = i + 1
-        return count
-
-    df = history(n+n2+1, unit='1d', field='money', security_list=security_list, skip_paused=True)
-    s = df.apply(money_5_cross_60_count, args=(n,n1,n2,))
-    return s
-
-def fall_money_day_3line(security_list,n, n1=20, n2=60, n3=160):
-    def fall_money_count(money, n, n1, n2, n3):
-        i = 0
-        count = 0
-        while i < n:
-            money_MA200 = money[i:n3-1+i].mean()
-            money_MA60 = money[i+n3-n2:n3-1+i].mean()
-            money_MA20 = money[i+n3-n1:n3-1+i].mean()
-            if money_MA20 <= money_MA60 and money_MA60 <= money_MA200 :
-                count = count + 1
-            i = i + 1
-        return count
-
-    df = history(n+n3, unit='1d', field='money', security_list=security_list, skip_paused=True)
-    log.info("=>1111111111111")
-    s = df.apply(fall_money_count, args=(n,n1,n2,n3,))
-    log.info("=>222222222")
-    return s
-
-
 def filter_by_query(stock_list, context, data):
     '''
     查询财务数据库过滤
@@ -541,14 +431,8 @@ def filter_by_query(stock_list, context, data):
     pe_min = 0
     pe_max = 200
     eps_min = 0
-<<<<<<< HEAD
     q = query(valuation.code).filter(valuation.code.in_(stock_list))
     #q=query(valuation.code).filter(valuation.market_cap<=30,valuation.code.in_(stock_list))
-=======
-
-    q = query(valuation.code).filter(valuation.code.in_(stock_list))
-    #q=query(valuation).filter(valuation.market_cap>=50,valuation.code.in_(stock_list))
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     if g.param['pick_by_pe'][g.VALUE]:
         q = q.filter(
             valuation.pe_ratio > pe_min,
@@ -557,7 +441,6 @@ def filter_by_query(stock_list, context, data):
     if g.param['pick_by_eps'][g.VALUE]:
         q = q.filter(indicator.eps > eps_min)
         
-<<<<<<< HEAD
     #df = get_fundamentals(q)
     #stock_list=list(df['code'])
     #q = query(valuation.code).filter(valuation.code.in_(stock_list))
@@ -566,14 +449,6 @@ def filter_by_query(stock_list, context, data):
     #log.info("=>start_date=%s"%start_date)
     df = get_fundamentals(q.order_by(valuation.market_cap.asc()).limit(g.param['pick_stock_count'][g.VALUE]))
     
-=======
-    df = get_fundamentals(
-        q.order_by(valuation.market_cap.asc()
-                   ).limit(
-            g.param['pick_stock_count'][g.VALUE]
-        ))
-
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
     return list(df['code'])
 
 
@@ -700,21 +575,12 @@ def filter_new(stock_list, context):
     return stock_list
 
 
-<<<<<<< HEAD
 def filter_old_stock(stock_list, context):
     tmpList = []
     for stock in stock_list :
         days_public=(context.current_dt.date() - get_security_info(stock).start_date).days
         # 上市未超过1年
         if days_public < 200:
-=======
-def filter_old_stock(stock_list, context, data):
-    tmpList = []
-    for stock in stock_list :
-        days_public=(context.current_dt.date() - get_security_info(stock).start_date).days
-        # 上市未超过1年
-        if days_public < 365:
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
             tmpList.append(stock)
     return tmpList
 
@@ -795,14 +661,10 @@ def filter_by_rank(stock_list, context, data):
                 #avg_15 = data[stock].mavg(15, field='close')
                 avg_15 = h['close'][-15:].mean()
                 cur_price = data[stock].close
-<<<<<<< HEAD
                 avg_5 = data[stock].mavg(5, field='money')
-=======
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
         
                 # avg_15 = h['close'][-15:].mean()
                 # cur_price = get_close_price(stock, 1, '1m')
-<<<<<<< HEAD
                 security_data[stock]=security_data[stock]+cur_prices[stock]
                 DIF, DEA, macd=tl.MACD(security_data[stock], fastperiod=10, slowperiod=22, signalperiod=8)
                 log.info("%s的DIF:%s" %(stock,DIF[-1]))
@@ -818,12 +680,6 @@ def filter_by_rank(stock_list, context, data):
                     score=(cur_price-high_price_130)/high_price_130+(cur_price-low_price_130)/low_price_130+(cur_price - avg_15)/avg_15
                     score=score+abs(DIF[-1])
                 #score=(cur_price-high_price_130)/high_price_130
-=======
-        
-                score = (cur_price - low_price_130)+(cur_price - high_price_130)+(cur_price - avg_15)
-                # score = ((cur_price-low_price_130) + (cur_price-high_price_130) +
-                # (cur_price-avg_15)) / cur_price
->>>>>>> branch 'master' of https://github.com/dujinxin001/join.git
                 dst_stocks[stock] = score
         
             df = pd.DataFrame(dst_stocks.values(), index=dst_stocks.keys())
@@ -1181,7 +1037,6 @@ def position_open(security, value):
         cur_price = get_close_price(security, 1, '1m')
         # cur_price = order.price
         g.cache['last_high'][security] = cur_price
-        g.executor.execute(order,g.param['buy_stock_count'][g.VALUE])
         return True
     return False
 
@@ -1200,7 +1055,7 @@ def position_close(position):
             # 只要有成交，无论全部成交还是部分成交，则统计盈亏
             g.trade_stat.watch(security, order.filled,
                                position.avg_cost, position.price)
-            g.executor.execute(order,g.param['buy_stock_count'][g.VALUE])
+
         if order.status == OrderStatus.held:
             # 全部成交则连接实盘并删除相关证券的最高价缓存
             #g.__executor.execute(order,g.param['buy_stock_count'][g.VALUE])
